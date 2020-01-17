@@ -714,8 +714,11 @@ void ReadTheFile() {
     // The x,r,b,g sequence below might need to be changed if your strip is displaying
     // incorrect colors.  Some strips use an x,r,b,g sequence and some use x,r,g,b
     // Change the order if needed to make the colors correct.
-
+    char num[5];
     for (int y = imgHeight; y > 0; y--) {
+        sprintf(num, "%3d", y);
+        lcd.setCursor(13, 0);
+        lcd.print(num);
         int bufpos = 0;
         for (int x = 0; x < displayWidth; x++) {
             uint32_t offset = (MYBMP_BF_OFF_BITS + (((y - 1) * lineLength) + (x * 3)));
