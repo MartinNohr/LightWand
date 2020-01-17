@@ -321,13 +321,13 @@ void loop() {
         // remember the time it was pressed
         if (startKeyDown == 0) {
             startKeyDown = millis();
-            Serial.println("start key timing");
+//            Serial.println("start key timing");
         }
         // calcualate how long to wait
         unsigned long now = millis();
         if (now > startKeyDown + 2000)
             kbdWaitTime = KEYWAITPAUSE / 4;
-        Serial.println("wait: " + String(kbdWaitTime));
+//        Serial.println("wait: " + String(kbdWaitTime));
         // do the prescribed wait
         delay(kbdWaitTime);
     }
@@ -555,26 +555,30 @@ void WalkLight()
         int r, g, b;
         switch (mode) {
         case 0: // red
-            r = 127;
+            r = 255;
             g = 0;
             b = 0;
             break;
         case 1: // green
             r = 0;
-            g = 127;
+            g = 255;
             b = 0;
             break;
         case 2: // blue
             r = 0;
             g = 0;
-            b = 127;
+            b = 255;
             break;
         case 3: // white
-            r = 127;
-            g = 127;
-            b = 127;
+            r = 255;
+            g = 255;
+            b = 255;
             break;
         }
+        g = gamma(g) / (101 - brightness);
+        b = gamma(b) / (101 - brightness);
+        r = gamma(r) / (101 - brightness);
+
         for (int ix = 0; ix < STRIP_LENGTH; ++ix) {
             if (ix > 0) {
                 strip.setPixelColor(ix - 1, 0);
