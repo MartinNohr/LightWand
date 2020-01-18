@@ -120,7 +120,7 @@ const char* menuStrings[] = {
     "File",
     "Brightness",
     "Init Delay",
-    "Frame Hold Time",
+    "Frame Time",
     "Repeat Times",
     "Repeat Delay",
     "Test",
@@ -712,6 +712,10 @@ void ReadTheFile() {
     // Change the order if needed to make the colors correct.
 
     for (int y = imgHeight; y > 0; y--) {
+        lcd.setCursor(13, 0);
+        char num[5];
+        sprintf(num, "%3d", y);
+        lcd.print(num);
         int bufpos = 0;
         for (int x = 0; x < displayWidth; x++) {
             uint32_t offset = (MYBMP_BF_OFF_BITS + (((y - 1) * lineLength) + (x * 3)));
