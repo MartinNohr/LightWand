@@ -356,7 +356,7 @@ void loop() {
         // remember the time it was pressed
         if (startKeyDown == 0) {
             startKeyDown = millis();
-            Serial.println("start key timing");
+//            Serial.println("start key timing");
         }
         // calcualate how long to wait
         unsigned long now = millis();
@@ -755,9 +755,9 @@ void ReadTheFile() {
     // Change the order if needed to make the colors correct.
 
     for (int y = imgHeight; y > 0; y--) {
-        lcd.setCursor(13, 0);
+        lcd.setCursor(12, 0);
         char num[5];
-        sprintf(num, "%3d", y);
+        sprintf(num, "%4d", y);
         lcd.print(num);
         int bufpos = 0;
         for (int x = 0; x < displayWidth; x++) {
