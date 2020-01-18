@@ -59,7 +59,7 @@ int repeatDelay = 0;                      // Variable for delay between repeats
 int updateMode = 0;                       // Variable to keep track of update Modes
 int repeatTimes = 1;                      // Variable to keep track of number of repeats
 int brightness = 50;                      // Variable and default for the Brightness of the strip
-
+int bGammaCorrection = true;              // set to use the gamma table
 
 // Other program variable declarations, assignments, and initializations
 byte x;
@@ -96,6 +96,27 @@ int kbdPause = 0;
 // set to zero when no key down, and watch time when one is pressed
 unsigned long startKeyDown = 0;
 
+// built-in tests
+enum e_tests { mtDots = 1, MAXTEST = mtDots };
+const char* testStrings[] = {
+    "Running Dots",
+};
+int nTestNumber = 0;
+
+// menu strings
+enum e_menuitem { mSelect = 1, mBrightness, mInitDelay, mFrameHoldTime, mRepeatTimes, mRepeatDelay, mTest, mSavedSettings, mGammaCorrection, MAXMENU = mGammaCorrection
+};
+const char* menuStrings[] = {
+    "File",
+    "Brightness",
+    "Init Delay",
+    "Frame Time",
+    "Repeat Times",
+    "Repeat Delay",
+    "Test",
+    "Saved Settings",
+    "Gamma Correct",
+};
 
 // Setup loop to get everything ready.  This is only run once at power on or reset
 void setup() {
@@ -114,24 +135,12 @@ void setup() {
     Serial.println("Finishing setup");
 }
 
-// menu strings
-enum e_menuitem { mSelect = 1, mBrightness, mInitDelay, mFrameHoldTime, mRepeatTimes, mRepeatDelay, mTest, mSavedSettings, MAXMENU = mSavedSettings };
-const char* menuStrings[] = {
-    "File",
-    "Brightness",
-    "Init Delay",
-    "Frame Time",
-    "Repeat Times",
-    "Repeat Delay",
-    "Test",
-    "Saved Settings",
-};
 // The Main Loop for the program starts here... 
 // This will loop endlessly looking for a key press to perform a function
 void loop() {
     if (BackLightTimer && menuItem != lastMenuItem) {
         lcd.begin(16, 2);
-        lcd.print(String(menuItem)+": "+menuStrings[menuItem - 1]);
+        lcd.print(String(menuItem)+":"+menuStrings[menuItem - 1]);
         if (menuItem == mSelect) {
             lcd.print(" " + String(m_FileIndex + 1) + "/" + String(m_NumberOfFiles));
         }
@@ -163,12 +172,14 @@ void loop() {
             lcd.print(String(repeatDelay) + " mSec");
             break;
         case mTest:
-            lcd.print("> to run");
+            lcd.print(testStrings[nTestNumber]);
             break;
         case mSavedSettings:
             lcd.print("<=Load >=Save");
             break;
-
+        case mGammaCorrection:
+            lcd.print(bGammaCorrection ? "ON" : "OFF");
+            break;
         }
         lastMenuItem = menuItem;
     }
@@ -188,21 +199,40 @@ void loop() {
     delay(50);
 
     if ((keypress == 4) || (digitalRead(AuxButton) == LOW)) {    // The select key was pressed
-        lcd.setCursor(0, 0);
-        lcd.print("Displaying...   ");
-        lcd.setCursor(0, 1);
-        lcd.print(m_CurrentFilename);
-        delay(initDelay * 1000);
-        if (repeatTimes > 1) {
+        switch (menuItem) {
+        case mTest: // if the test menu is displayed run it
+            lcd.setCursor(0, 0);
+            lcd.print("Running Test... ");
+            lcd.setCursor(0, 1);
+            lcd.print(testStrings[nTestNumber]);
+            delay(initDelay * 1000);
             for (int x = repeatTimes; x > 0; x--) {
-                SendFile(m_CurrentFilename);
-                delay(repeatDelay);
+                WalkLight();
+                if (x > 1) {
+                    delay(repeatDelay);
+                }
             }
+            ClearStrip();
+            break;
+        default:    // any other menu just run the selected file
+            lcd.setCursor(0, 0);
+            lcd.print("Displaying...   ");
+            lcd.setCursor(0, 1);
+            lcd.print(m_CurrentFilename);
+            delay(initDelay * 1000);
+            if (repeatTimes > 1) {
+                for (int x = repeatTimes; x > 0; x--) {
+                    SendFile(m_CurrentFilename);
+                    delay(repeatDelay);
+                }
+            }
+            else {
+                SendFile(m_CurrentFilename);
+            }
+            ClearStrip();
+            break;
         }
-        else {
-            SendFile(m_CurrentFilename);
-        }
-        ClearStrip();
+
         lastMenuItem = -1;  // show the menu again
     }
     if (keypress == 0) {                    // The Right Key was Pressed
@@ -236,11 +266,13 @@ void loop() {
             repeatDelay += 100;
             break;
         case mTest:
-            WalkLight();
             break;
         case mSavedSettings:
             // save them
             SaveSettings(true);
+            break;
+        case mGammaCorrection:
+            bGammaCorrection = !bGammaCorrection;
             break;
         }
     }
@@ -289,6 +321,9 @@ void loop() {
             // load the settings
             SaveSettings(false);
             break;
+        case mGammaCorrection:
+            bGammaCorrection = !bGammaCorrection;
+            break;
         }
     }
 
@@ -327,6 +362,8 @@ void loop() {
         unsigned long now = millis();
         if (now > startKeyDown + 2000)
             kbdWaitTime = KEYWAITPAUSE / 4;
+        if (now > startKeyDown + 4000)
+            kbdWaitTime = KEYWAITPAUSE / 10;
         Serial.println("wait: " + String(kbdWaitTime));
         // do the prescribed wait
         delay(kbdWaitTime);
@@ -349,6 +386,7 @@ void SaveSettings(bool save)
         {&repeat, sizeof repeat},
         {&repeatTimes, sizeof repeatTimes},
         {&repeatDelay, sizeof repeatDelay},
+        {&bGammaCorrection,sizeof bGammaCorrection},
     };
     for (int ix = 0; ix < (sizeof valueList / sizeof * valueList); ++ix) {
         if (save) {
@@ -552,29 +590,30 @@ void WalkLight()
 {
     for (int mode = 0; mode <= 3; ++mode) {
         // RGBW
-        int r, g, b;
+        byte r, g, b;
         switch (mode) {
         case 0: // red
-            r = 127;
+            r = 255;
             g = 0;
             b = 0;
             break;
         case 1: // green
             r = 0;
-            g = 127;
+            g = 255;
             b = 0;
             break;
         case 2: // blue
             r = 0;
             g = 0;
-            b = 127;
+            b = 255;
             break;
         case 3: // white
-            r = 127;
-            g = 127;
-            b = 127;
+            r = 255;
+            g = 255;
+            b = 255;
             break;
         }
+        fixRGBwithGamma(&r, &g, &b);
         for (int ix = 0; ix < STRIP_LENGTH; ++ix) {
             if (ix > 0) {
                 strip.setPixelColor(ix - 1, 0);
@@ -587,7 +626,6 @@ void WalkLight()
         strip.setPixelColor(STRIP_LENGTH - 1, 0);
         strip.show();
     }
-    ClearStrip();
 }
 
 
@@ -640,6 +678,11 @@ void getRGBwithGamma() {
     r = gamma(readByte()) / (101 - brightness);
 }
 
+void fixRGBwithGamma(byte* rp, byte* gp, byte* bp) {
+    *gp = gamma(*gp) / (101 - brightness);
+    *bp = gamma(*bp) / (101 - brightness);
+    *rp = gamma(*rp) / (101 - brightness);
+}
 
 
 void ReadTheFile() {
@@ -767,5 +810,5 @@ PROGMEM const unsigned char gammaTable[] = {
 
 
 inline byte gamma(byte x) {
-    return pgm_read_byte(&gammaTable[x]);
+    return bGammaCorrection ? pgm_read_byte(&gammaTable[x]) : (x & 0x7f);
 }
