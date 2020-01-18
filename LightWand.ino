@@ -120,7 +120,7 @@ const char* menuStrings[] = {
     "File",
     "Brightness",
     "Init Delay",
-    "Frame Hold Time",
+    "Frame Time",
     "Repeat Times",
     "Repeat Delay",
     "Test",
@@ -131,7 +131,7 @@ const char* menuStrings[] = {
 void loop() {
     if (BackLightTimer && menuItem != lastMenuItem) {
         lcd.begin(16, 2);
-        lcd.print(String(menuItem)+": "+menuStrings[menuItem - 1]);
+        lcd.print(String(menuItem) + ": " + menuStrings[menuItem - 1]);
         if (menuItem == mSelect) {
             lcd.print(" " + String(m_FileIndex + 1) + "/" + String(m_NumberOfFiles));
         }
@@ -189,7 +189,7 @@ void loop() {
 
     if ((keypress == 4) || (digitalRead(AuxButton) == LOW)) {    // The select key was pressed
         lcd.setCursor(0, 0);
-        lcd.print("Displaying...   ");
+        lcd.print("Displaying      ");
         lcd.setCursor(0, 1);
         lcd.print(m_CurrentFilename);
         delay(initDelay * 1000);
@@ -714,10 +714,11 @@ void ReadTheFile() {
     // The x,r,b,g sequence below might need to be changed if your strip is displaying
     // incorrect colors.  Some strips use an x,r,b,g sequence and some use x,r,g,b
     // Change the order if needed to make the colors correct.
-    char num[5];
+
     for (int y = imgHeight; y > 0; y--) {
-        sprintf(num, "%3d", y);
-        lcd.setCursor(13, 0);
+        lcd.setCursor(12, 0);
+        char num[5];
+        sprintf(num, "%4d", y);
         lcd.print(num);
         int bufpos = 0;
         for (int x = 0; x < displayWidth; x++) {
