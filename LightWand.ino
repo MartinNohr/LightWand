@@ -59,7 +59,8 @@ int repeatDelay = 0;                      // Variable for delay between repeats
 int updateMode = 0;                       // Variable to keep track of update Modes
 int repeatTimes = 1;                      // Variable to keep track of number of repeats
 int brightness = 50;                      // Variable and default for the Brightness of the strip
-int bGammaCorrection = true;              // set to use the gamma table
+bool bGammaCorrection = true;             // set to use the gamma table
+bool bAutoLoadSettings = false;           // set to automatically load saved settings
 
 // Other program variable declarations, assignments, and initializations
 byte x;
@@ -70,12 +71,12 @@ Adafruit_NeoPixel strip = Adafruit_NeoPixel(stripLength, NPPin, NEO_GRB + NEO_KH
 
 // BacklightControl to save battery Life
 boolean BackLightTimer = true;
-int BackLightTimeout = 100;                // Adjust this to a larger number if you want a longer delay
+int BackLightTimeout = 250;                // Adjust this to a larger number if you want a longer delay
 int BackLightTemp = BackLightTimeout;
 
 // Variable assignments for the Keypad
 int adc_key_val[5] = { 30, 170, 390, 600, 800 };
-int NUM_KEYS = 5;
+enum keyvals { KEYNONE = -1, KEYRIGHT = 0, KEYUP, KEYDOWN, KEYLEFT, KEYSELECT, NUM_KEYS };
 int adc_key_in;
 int key = -1;
 int oldkey = -1;
@@ -114,6 +115,7 @@ enum e_menuitem {
     mGammaCorrection,
     mStripLength,
     mTest,
+    mAutoLoadSettings,
     mSavedSettings,
     MAXMENU = mSavedSettings
 };
@@ -127,18 +129,11 @@ const char* menuStrings[] = {
     "Gamma Correct",
     "Strip Length",
     "Test",
+    "Autoload Sets",
     "Saved Settings",
 };
-uint8_t ch1[8] = {
-    B00000,
-    B00000,
-    B11011,
-    B00100,
-    B10001,
-    B01010,
-    B00100,
-    B00000
-};
+
+// storage for special character
 byte chZeroPattern[8];
 
 // Setup loop to get everything ready.  This is only run once at power on or reset
@@ -156,6 +151,7 @@ void setup() {
     setupSDcard();
     BackLightOn();
     Serial.println("Finishing setup");
+    SaveSettings(false, true);
 }
 
 // create a character by filling blocks to indicate how far down the menu we are
@@ -220,12 +216,16 @@ void loop() {
             lcd.print(stripLength);
             lcd.print(" pixels");
             break;
+        case mAutoLoadSettings:
+            lcd.print(bAutoLoadSettings ? "ON" : "OFF");
+            break;
         }
         lastMenuItem = menuItem;
     }
 
     int keypress = ReadKeypad();
-    if (keypress != -1) {
+
+    if (keypress != KEYNONE) {
         bool oldBackLightTimer = BackLightTimer;
         BackLightOn();
         if (oldBackLightTimer == false) {
@@ -238,9 +238,8 @@ void loop() {
     }
     delay(20);
 
-    if ((keypress == 4) || (digitalRead(AuxButton) == LOW)) {    // The select key was pressed
-        switch (menuItem) {
-        case mTest: // if the test menu is displayed run it
+    if ((keypress == KEYSELECT) || (digitalRead(AuxButton) == LOW)) {    // The select key was pressed
+        if (menuItem == mTest) {
             lcd.setCursor(0, 0);
             lcd.print("Running Test... ");
             lcd.setCursor(0, 1);
@@ -253,33 +252,29 @@ void loop() {
                 }
             }
             ClearStrip();
-            break;
-        default:    // any other menu just run the selected file
+        }
+        else {
             lcd.setCursor(0, 0);
             lcd.print("Displaying      ");
             lcd.setCursor(0, 1);
             lcd.print(m_CurrentFilename);
             delay(initDelay * 1000);
-            if (repeatTimes > 1) {
-                for (int x = repeatTimes; x > 0; x--) {
-                    SendFile(m_CurrentFilename);
+            for (int x = repeatTimes; x > 0; x--) {
+                Serial.println("sendfile");
+                SendFile(m_CurrentFilename);
+                if (x > 1) {
                     delay(repeatDelay);
                 }
             }
-            else {
-                SendFile(m_CurrentFilename);
-            }
             ClearStrip();
-            break;
         }
-
         lastMenuItem = -1;  // show the menu again
     }
-    if (keypress == 0) {                    // The Right Key was Pressed
+    if (keypress == KEYRIGHT) {                    // The Right Key was Pressed
         // redraw
         lastMenuItem = -1;
-        switch (menuItem) {
-        case mSelectFile:                             // Select the Next File
+        // redid this as if/else if because switch was crashing
+        if (menuItem == mSelectFile) {
             if (m_FileIndex < m_NumberOfFiles - 1) {
                 m_FileIndex++;
             }
@@ -287,44 +282,45 @@ void loop() {
                 m_FileIndex = 0;                // On the last file so wrap round to the first file
             }
             DisplayCurrentFilename();
-            break;
-        case mBrightness:                             // Adjust Brightness
+        }
+        else if (menuItem == mBrightness) {
             if (brightness < 100) {
                 ++brightness;
             }
-            break;
-        case mInitDelay:                             // Adjust Initial Delay + 1 second
+        }
+        else if (menuItem == mInitDelay) {
             ++initDelay;
-            break;
-        case mFrameHoldTime:                             // Adjust Frame Delay + 1 milliseconds 
+        }
+        else if (menuItem == mFrameHoldTime) {
             frameHold += 1;
-            break;
-        case mRepeatTimes:                             // Adjust Repeat Times + 1
+        }
+        else if (menuItem == mRepeatTimes) {
             repeatTimes += 1;
-            break;
-        case mRepeatDelay:                             // Adjust Repeat Delay + 100 milliseconds
+        }
+        else if (menuItem == mRepeatDelay) {
             repeatDelay += 100;
-            break;
-        case mTest:
-            break;
-        case mSavedSettings:
-            // save them
-            SaveSettings(true);
-            break;
-        case mGammaCorrection:
+        }
+        else if (menuItem == mTest) {
+        }
+        else if (menuItem == mSavedSettings) {
+            SaveSettings(true, false);
+        }
+        else if (menuItem == mGammaCorrection) {
             bGammaCorrection = !bGammaCorrection;
-            break;
-        case mStripLength:
+        }
+        else if (menuItem == mStripLength) {
             strip.updateLength(++stripLength);
-            break;
+        }
+        else if (menuItem == mAutoLoadSettings) {
+            bAutoLoadSettings = !bAutoLoadSettings;
         }
     }
 
-    if (keypress == 3) {                    // The Left Key was Pressed
+    if (keypress == KEYLEFT) {                    // The Left Key was Pressed
         // redraw
         lastMenuItem = -1;
-        switch (menuItem) {                   // Select the Previous File
-        case mSelectFile:
+
+        if (menuItem == mSelectFile) {
             if (m_FileIndex > 0) {
                 m_FileIndex--;
             }
@@ -332,50 +328,51 @@ void loop() {
                 m_FileIndex = m_NumberOfFiles - 1;    // On the last file so wrap round to the first file
             }
             DisplayCurrentFilename();
-            break;
-        case mBrightness:                             // Adjust Brightness
+        }
+        else if (menuItem == mBrightness) {
             if (brightness > 1) {
                 --brightness;
             }
-            break;
-        case mInitDelay:                             // Adjust Initial Delay - 1 second
+        }
+        else if (menuItem == mInitDelay) {
             if (initDelay > 0) {
                 --initDelay;
             }
-            break;
-        case mFrameHoldTime:                             // Adjust Frame Delay - 1 millisecond 
+        }
+        else if (menuItem == mFrameHoldTime) {
             if (frameHold > 0) {
                 frameHold -= 1;
             }
-            break;
-        case mRepeatTimes:                             // Adjust Repeat Times - 1
+        }
+        else if (menuItem == mRepeatTimes) {
             if (repeatTimes > 1) {
                 repeatTimes -= 1;
             }
-            break;
-        case mRepeatDelay:                             // Adjust Repeat Delay - 100 milliseconds
+        }
+        else if (menuItem == mRepeatDelay) {
             if (repeatDelay > 0) {
                 repeatDelay -= 100;
             }
-            break;
-        case mTest:
-            break;
-        case mSavedSettings:
+        }
+        else if (menuItem == mTest) {
+        }
+        else if (menuItem == mSavedSettings) {
             // load the settings
-            SaveSettings(false);
-            break;
-        case mGammaCorrection:
+            SaveSettings(false, false);
+        }
+        else if (menuItem == mGammaCorrection) {
             bGammaCorrection = !bGammaCorrection;
-            break;
-        case mStripLength:
+        }
+        else if (menuItem == mStripLength) {
             if (stripLength > 1)
                 strip.updateLength(--stripLength);
-            break;
+        }
+        else if (menuItem == mAutoLoadSettings) {
+            bAutoLoadSettings = !bAutoLoadSettings;
         }
     }
 
-
-    if ((keypress == 1)) {                 // The up key was pressed
+    if ((keypress == KEYUP)) {                 // The up key was pressed
         if (menuItem == 1) {
             menuItem = MAXMENU;
         }
@@ -383,7 +380,7 @@ void loop() {
             menuItem -= 1;
         }
     }
-    if ((keypress == 2)) {                 // The down key was pressed
+    if ((keypress == KEYDOWN)) {                 // The down key was pressed
         if (menuItem == MAXMENU) {
             menuItem = 1;
         }
@@ -392,7 +389,7 @@ void loop() {
         }
     }
     // wait a bit between keypresses
-    if (keypress == -1) {
+    if (keypress == KEYNONE) {
         // no key is pressed, reset the timer
         startKeyDown = 0;
         // and the keypause
@@ -417,7 +414,8 @@ void loop() {
 }
 
 // save some settings in the eeprom
-void SaveSettings(bool save)
+// if autoload is true, check the first flag, and load the rest if it is true
+void SaveSettings(bool save, bool autoload)
 {
     void* where = (void*)NULL;
     struct saveValues {
@@ -425,6 +423,7 @@ void SaveSettings(bool save)
         int size;
     };
     const saveValues valueList[] = {
+        {&bAutoLoadSettings, sizeof bAutoLoadSettings},
         {&brightness, sizeof brightness},
         {&frameHold, sizeof frameHold},
         {&initDelay, sizeof initDelay},
@@ -438,8 +437,14 @@ void SaveSettings(bool save)
         if (save) {
             eeprom_write_block(valueList[ix].val, where, valueList[ix].size);
         }
-        else {
+        else {  // load
             eeprom_read_block(valueList[ix].val, where, valueList[ix].size);
+            // if autoload, exit if the save value is not true
+            if (autoload && ix == 0) {
+                if (!bAutoLoadSettings) {
+                    return;
+                }
+            }
         }
         where = (void*)((byte*)where + valueList[ix].size);
     }
