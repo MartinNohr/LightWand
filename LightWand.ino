@@ -94,9 +94,10 @@ int kbdPause = 0;
 unsigned long startKeyDown = 0;
 
 // built-in tests
-enum e_tests { mtDots = 1, MAXTEST = mtDots };
+enum e_tests { mtDots = 0, mtTwoDots, MAXTEST };
 const char* testStrings[] = {
     "Running Dots",
+    "Opposite Dots",
 };
 int nTestNumber = 0;
 
@@ -294,7 +295,7 @@ void loop() {
             lcd.print(testStrings[nTestNumber]);
             delay(initDelay * 1000);
             for (int x = repeatTimes; x > 0; x--) {
-                WalkLight();
+                RunTest();
                 if (x > 1) {
                     delay(repeatDelay);
                 }
@@ -349,6 +350,8 @@ void loop() {
             repeatDelay += 100;
         }
         else if (menuItem == mTest) {
+            if (nTestNumber < MAXTEST - 1)
+                ++nTestNumber;
         }
         else if (menuItem == mBackLightBrightness) {
             if (nMaxBackLight < 100)
@@ -410,6 +413,8 @@ void loop() {
             }
         }
         else if (menuItem == mTest) {
+            if (nTestNumber)
+                --nTestNumber;
         }
         else if (menuItem == mBackLightBrightness) {
             if (nMaxBackLight > 5)
@@ -662,8 +667,6 @@ void latchanddelay(int dur) {
     delay(dur);
 }
 
-
-
 void ClearStrip() {
     for (int x = 0; x < stripLength; x++) {
         strip.setPixelColor(x, 0);
@@ -671,6 +674,21 @@ void ClearStrip() {
     strip.show();
 }
 
+// run a test pattern
+void RunTest()
+{
+    switch (nTestNumber) {
+    case 0:
+        WalkLight();
+        break;
+    case 1:
+        WalkOpposites();
+        break;
+    }
+
+}
+
+// running bits
 void WalkLight()
 {
     for (int mode = 0; mode <= 3; ++mode) {
@@ -713,6 +731,49 @@ void WalkLight()
     }
 }
 
+void WalkOpposites()
+{
+    for (int mode = 0; mode <= 3; ++mode) {
+        // RGBW
+        byte r, g, b;
+        switch (mode) {
+        case 0: // red
+            r = 255;
+            g = 0;
+            b = 0;
+            break;
+        case 1: // green
+            r = 0;
+            g = 255;
+            b = 0;
+            break;
+        case 2: // blue
+            r = 0;
+            g = 0;
+            b = 255;
+            break;
+        case 3: // white
+            r = 255;
+            g = 255;
+            b = 255;
+            break;
+        }
+        fixRGBwithGamma(&r, &g, &b);
+        for (int ix = 0; ix < stripLength; ++ix) {
+            if (ix > 0) {
+                strip.setPixelColor(ix - 1, 0);
+                strip.setPixelColor(stripLength - ix + 1, 0);
+            }
+            strip.setPixelColor(stripLength - ix, r, g, b);
+            strip.setPixelColor(ix, r, g, b);
+            strip.show();
+            delay(frameHold);
+        }
+        // remember the last one, turn it off
+        strip.setPixelColor(stripLength - 1, 0);
+        strip.show();
+    }
+}
 
 uint32_t readLong() {
     uint32_t retValue;
