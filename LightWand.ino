@@ -37,6 +37,7 @@
 #include <LiquidCrystal.h>               // Library for the LCD Display
 #include <SPI.h>                         // Library for the SPI Interface
 #include <avr/eeprom.h>
+#include <timer.h>
 
 // Pin assignments for the Arduino (Make changes to these if you use different Pins)
 #define BACKLIGHT 10                      // Pin used for the LCD Backlight
@@ -58,7 +59,7 @@ int repeat = 0;                           // Variable to select auto repeat (unt
 int repeatDelay = 0;                      // Variable for delay between repeats
 int updateMode = 0;                       // Variable to keep track of update Modes
 int repeatTimes = 1;                      // Variable to keep track of number of repeats
-int brightness = 50;                      // Variable and default for the Brightness of the strip
+int nStripBrightness = 50;                      // Variable and default for the Brightness of the strip
 bool bGammaCorrection = true;             // set to use the gamma table
 bool bAutoLoadSettings = false;           // set to automatically load saved settings
 
@@ -68,11 +69,6 @@ LiquidCrystal lcd(8, 9, 4, 5, 6, 7);      // Init the LCD
 
 // Declaring the two LED Strips and pin assignments to each 
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(stripLength, NPPin, NEO_GRB + NEO_KHZ800);
-
-// BacklightControl to save battery Life
-boolean BackLightTimer = true;
-int BackLightTimeout = 250;                // Adjust this to a larger number if you want a longer delay
-int BackLightTemp = BackLightTimeout;
 
 // Variable assignments for the Keypad
 int adc_key_val[5] = { 30, 170, 390, 600, 800 };
@@ -107,7 +103,7 @@ int nTestNumber = 0;
 // menu strings
 enum e_menuitem {
     mSelectFile = 1,
-    mBrightness,
+    mStripBrightness,
     mInitDelay,
     mFrameHoldTime,
     mRepeatTimes,
@@ -115,6 +111,8 @@ enum e_menuitem {
     mGammaCorrection,
     mStripLength,
     mTest,
+    mBackLightBrightness,
+    mBackLightTimer,
     mAutoLoadSettings,
     mSavedSettings,
     MAXMENU = mSavedSettings
@@ -128,13 +126,57 @@ const char* menuStrings[] = {
     "Repeat Delay",
     "Gamma Correct",
     "Strip Length",
-    "Test",
+    "Test Patterns",
+    "LCD Brightness",
+    "LCD Timeout",
     "Autoload Sets",
     "Saved Settings",
 };
 
 // storage for special character
 byte chZeroPattern[8];
+
+int nMaxBackLight = 75;        // maximum backlight to use in %
+int nBackLightSeconds = 5;      // how long to leave the backlight on before dimming
+bool bBackLightOn = false;      // used by backlight timer to indicate that backlight is on
+bool bTurnOnBacklight = true;   // set to turn the backlight on, safer than calling the BackLightControl code
+// timers to run things
+auto backLightTimer = timer_create_default();
+// this gets called every second/TIMERSTEPS
+#define TIMERSTEPS 10
+bool BackLightControl(void*)
+{
+    static int light;
+    static int fade;
+    static int timer;
+    // change % to 0-255
+    int abslight = 255 * nMaxBackLight / 100;
+    if (bTurnOnBacklight) {
+        timer = nBackLightSeconds * TIMERSTEPS;
+        bBackLightOn = true;
+        bTurnOnBacklight = false;
+    }
+    if (timer > 1) {
+        light = abslight;
+    }
+    else if (timer == 1) {
+        // start the fade timer
+        fade = abslight / TIMERSTEPS;
+    }
+    if (bBackLightOn)
+        analogWrite(BACKLIGHT, light);
+    if (timer > 0)
+        --timer;
+    if (fade) {
+        light -= fade;
+        if (light < 0) {
+            light = 0;
+            bBackLightOn = false;
+            analogWrite(BACKLIGHT, light);
+        }
+    }
+    return true;    // repeat true
+}
 
 // Setup loop to get everything ready.  This is only run once at power on or reset
 void setup() {
@@ -149,9 +191,11 @@ void setup() {
     setupLEDs();
     setupLCDdisplay();
     setupSDcard();
-    BackLightOn();
+    // turn on the keyboard reader
+    digitalWrite(LED_BUILTIN, HIGH);
     Serial.println("Finishing setup");
     SaveSettings(false, true);
+    backLightTimer.every(1000 / TIMERSTEPS, BackLightControl);
 }
 
 // create a character by filling blocks to indicate how far down the menu we are
@@ -167,7 +211,8 @@ void createZeroCharacter()
 // The Main Loop for the program starts here... 
 // This will loop endlessly looking for a key press to perform a function
 void loop() {
-    if (BackLightTimer && menuItem != lastMenuItem) {
+    backLightTimer.tick();
+    if (bBackLightOn && menuItem != lastMenuItem) {
         createZeroCharacter();
         lcd.clear();
         lcd.setCursor(0, 0);
@@ -181,9 +226,9 @@ void loop() {
         case mSelectFile:
             lcd.print(m_CurrentFilename);
             break;
-        case mBrightness:
-            lcd.print(brightness);
-            if (brightness == 100) {
+        case mStripBrightness:
+            lcd.print(nStripBrightness);
+            if (nStripBrightness == 100) {
                 lcd.setCursor(3, 1);
             }
             else {
@@ -206,6 +251,12 @@ void loop() {
         case mTest:
             lcd.print(testStrings[nTestNumber]);
             break;
+        case mBackLightBrightness:
+            lcd.print(String(nMaxBackLight) + " %");
+            break;
+        case mBackLightTimer:
+            lcd.print(String(nBackLightSeconds) + " Seconds");
+            break;
         case mSavedSettings:
             lcd.print("<=Load >=Save");
             break;
@@ -222,21 +273,18 @@ void loop() {
         }
         lastMenuItem = menuItem;
     }
-
+    bool oldBackLightOn = bBackLightOn;
     int keypress = ReadKeypad();
 
     if (keypress != KEYNONE) {
-        bool oldBackLightTimer = BackLightTimer;
-        BackLightOn();
-        if (oldBackLightTimer == false) {
-            // just eat the key
+        if (!oldBackLightOn) {
+            // just eat the key if the light was off
             // wait for release
             while (ReadKeypad() != -1)
                 ;
             return;
         }
     }
-    delay(20);
 
     if ((keypress == KEYSELECT) || (digitalRead(AuxButton) == LOW)) {    // The select key was pressed
         if (menuItem == mTest) {
@@ -283,9 +331,9 @@ void loop() {
             }
             DisplayCurrentFilename();
         }
-        else if (menuItem == mBrightness) {
-            if (brightness < 100) {
-                ++brightness;
+        else if (menuItem == mStripBrightness) {
+            if (nStripBrightness < 100) {
+                ++nStripBrightness;
             }
         }
         else if (menuItem == mInitDelay) {
@@ -301,6 +349,13 @@ void loop() {
             repeatDelay += 100;
         }
         else if (menuItem == mTest) {
+        }
+        else if (menuItem == mBackLightBrightness) {
+            if (nMaxBackLight < 100)
+                ++nMaxBackLight;
+        }
+        else if (menuItem == mBackLightTimer) {
+            ++nBackLightSeconds;
         }
         else if (menuItem == mSavedSettings) {
             SaveSettings(true, false);
@@ -329,9 +384,9 @@ void loop() {
             }
             DisplayCurrentFilename();
         }
-        else if (menuItem == mBrightness) {
-            if (brightness > 1) {
-                --brightness;
+        else if (menuItem == mStripBrightness) {
+            if (nStripBrightness > 1) {
+                --nStripBrightness;
             }
         }
         else if (menuItem == mInitDelay) {
@@ -355,6 +410,14 @@ void loop() {
             }
         }
         else if (menuItem == mTest) {
+        }
+        else if (menuItem == mBackLightBrightness) {
+            if (nMaxBackLight > 5)
+                --nMaxBackLight;
+        }
+        else if (menuItem == mBackLightTimer) {
+            if (nBackLightSeconds > 1)
+                --nBackLightSeconds;
         }
         else if (menuItem == mSavedSettings) {
             // load the settings
@@ -410,7 +473,6 @@ void loop() {
         // do the prescribed wait
         delay(kbdWaitTime);
     }
-    if (BackLightTimer == true) BackLightTime();
 }
 
 // save some settings in the eeprom
@@ -424,14 +486,16 @@ void SaveSettings(bool save, bool autoload)
     };
     const saveValues valueList[] = {
         {&bAutoLoadSettings, sizeof bAutoLoadSettings},
-        {&brightness, sizeof brightness},
+        {&nStripBrightness, sizeof nStripBrightness},
         {&frameHold, sizeof frameHold},
         {&initDelay, sizeof initDelay},
         {&repeat, sizeof repeat},
         {&repeatTimes, sizeof repeatTimes},
         {&repeatDelay, sizeof repeatDelay},
-        {&bGammaCorrection,sizeof bGammaCorrection},
-        {&stripLength,sizeof stripLength},
+        {&bGammaCorrection, sizeof bGammaCorrection},
+        {&stripLength, sizeof stripLength},
+        {&nBackLightSeconds, sizeof nBackLightSeconds},
+        {&nMaxBackLight, sizeof nMaxBackLight},
     };
     for (int ix = 0; ix < (sizeof valueList / sizeof * valueList); ++ix) {
         if (save) {
@@ -473,7 +537,7 @@ void setupSDcard() {
     pinMode(SDssPin, OUTPUT);
 
     while (!SD.begin(SDssPin)) {
-        BackLightOn();
+        bBackLightOn = true;
         lcd.print("SD init failed! ");
         delay(1000);
         lcd.clear();
@@ -496,7 +560,6 @@ void setupSDcard() {
 
 int ReadKeypad() {
     adc_key_in = analogRead(0);             // read the value from the sensor  
-    digitalWrite(13, HIGH);
     key = get_key(adc_key_in);              // convert into key press
 
     if (key != oldkey) {                    // if keypress is detected
@@ -506,6 +569,8 @@ int ReadKeypad() {
         if (key != oldkey) {
             oldkey = key;
             if (key >= 0) {
+                // turn the light on
+                bTurnOnBacklight = true;
                 return key;
             }
         }
@@ -528,35 +593,6 @@ int get_key(unsigned int input) {
     return k;
 }
 
-
-
-void BackLightOn() {
-    analogWrite(BACKLIGHT, 70);
-    BackLightTimer = true;
-    BackLightTemp = BackLightTimeout;
-}
-
-
-
-void BackLightTime() {
-    if ((BackLightTemp <= 255) && (BackLightTemp >= 0)) {
-        analogWrite(BACKLIGHT, BackLightTemp);
-        delay(1);
-    }
-
-    if (BackLightTemp <= 0) {
-        BackLightTimer = false;
-        BackLightTemp = BackLightTimeout;
-        analogWrite(BACKLIGHT, 0);
-    }
-    else {
-        BackLightTemp--;
-        delay(1);
-    }
-}
-
-
-
 void SendFile(String Filename) {
     char temp[14];
     Filename.toCharArray(temp, 14);
@@ -573,15 +609,13 @@ void SendFile(String Filename) {
         lcd.print("  Error reading ");
         lcd.setCursor(4, 1);
         lcd.print("file");
-        BackLightOn();
+        bBackLightOn = true;
         delay(1000);
         lcd.clear();
         setupSDcard();
         return;
     }
 }
-
-
 
 void DisplayCurrentFilename() {
     m_CurrentFilename = m_FileNames[m_FileIndex];
@@ -724,15 +758,15 @@ int readByte() {
 
 
 void getRGBwithGamma() {
-    g = gamma(readByte()) / (101 - brightness);
-    b = gamma(readByte()) / (101 - brightness);
-    r = gamma(readByte()) / (101 - brightness);
+    g = gamma(readByte()) / (101 - nStripBrightness);
+    b = gamma(readByte()) / (101 - nStripBrightness);
+    r = gamma(readByte()) / (101 - nStripBrightness);
 }
 
 void fixRGBwithGamma(byte* rp, byte* gp, byte* bp) {
-    *gp = gamma(*gp) / (101 - brightness);
-    *bp = gamma(*bp) / (101 - brightness);
-    *rp = gamma(*rp) / (101 - brightness);
+    *gp = gamma(*gp) / (101 - nStripBrightness);
+    *bp = gamma(*bp) / (101 - nStripBrightness);
+    *rp = gamma(*rp) / (101 - nStripBrightness);
 }
 
 
