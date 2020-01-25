@@ -688,11 +688,14 @@ void ClearStrip() {
 // checkerboard
 void CheckerBoard()
 {
+    byte r, g, b;
     for (int x = 0; x < 30; ++x) {
         // one row with BW, and the next WB
         // write 15 pixels alternating white and black
         for (int y = 0; y < stripLength; ++y) {
-            strip.setPixelColor(y, ((((y / 15) % 2) ^ (x % 2)) & 1) ? 0 : 127);
+            r = g = b = ((((y / 15) % 2) ^ (x % 2)) & 1) ? 0 : 255;
+            fixRGBwithGamma(&r, &g, &b);
+            strip.setPixelColor(y, r, g, b);
         }
         strip.show();
         delay(frameHold);
