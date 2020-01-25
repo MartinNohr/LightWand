@@ -51,7 +51,7 @@ int r = 0;                                // Variable for the Red Value
 
 // Initial Variable declarations and assignments (Make changes to these if you want to change defaults)
 int stripLength = 144;                    // Set the number of LEDs the LED Strip
-int frameHold = 15;                       // default for the frame delay 
+int frameHold = 150;                      // default for the frame delay 
 int lastMenuItem = -1;                    // check to see if we need to redraw menu
 int menuItem = 1;                         // Variable for current main menu selection
 int initDelay = 0;                        // Variable for delay between button press and start of light sequence, in seconds
@@ -302,11 +302,12 @@ void loop() {
             for (int x = repeatTimes; x > 0; x--) {
                 // run the test
                 (*testFunctions[nTestNumber])();
+                strip.clear();
+                strip.show();
                 if (x > 1) {
                     delay(repeatDelay);
                 }
             }
-            ClearStrip();
         }
         else {
             lcd.clear();
@@ -318,11 +319,12 @@ void loop() {
             for (int x = repeatTimes; x > 0; x--) {
                 Serial.println("sendfile");
                 SendFile(m_CurrentFilename);
+                strip.clear();
+                strip.show();
                 if (x > 1) {
                     delay(repeatDelay);
                 }
             }
-            ClearStrip();
         }
         lastMenuItem = -1;  // show the menu again
     }
@@ -689,11 +691,12 @@ void ClearStrip() {
 void CheckerBoard()
 {
     byte r, g, b;
-    for (int x = 0; x < 30; ++x) {
+    int size = sqrt(stripLength);
+    for (int x = 0; x < size * 2; ++x) {
         // one row with BW, and the next WB
-        // write 15 pixels alternating white and black
+        // write pixels alternating white and black
         for (int y = 0; y < stripLength; ++y) {
-            r = g = b = ((((y / 15) % 2) ^ (x % 2)) & 1) ? 0 : 255;
+            r = g = b = ((((y / size) % 2) ^ (x % 2)) & 1) ? 0 : 255;
             fixRGBwithGamma(&r, &g, &b);
             strip.setPixelColor(y, r, g, b);
         }
