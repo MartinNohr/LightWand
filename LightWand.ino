@@ -84,7 +84,6 @@ String m_CurrentFilename = "";
 int m_FileIndex = 0;
 int m_NumberOfFiles = 0;
 String m_FileNames[200];
-//long stripBuffer[STRIP_LENGTH];
 
 // keyboard speeds up when held down longer
 #define KEYWAITPAUSE 250
@@ -93,12 +92,17 @@ int kbdPause = 0;
 // set to zero when no key down, and watch time when one is pressed
 unsigned long startKeyDown = 0;
 
-// built-in tests
-enum e_tests { mtDots = 0, mtTwoDots, MAXTEST };
-const char* testStrings[] = {
+// built-in test patterns
+enum e_tests { mtDots = 0, mtTwoDots, mtRandomBars, mtCheckerBoard, MAXTEST };
+// test functions, in same order as enums above
+void (*testFunctions[MAXTEST])() = { RunningDot, OppositeRunningDots, RandomBars, CheckerBoard };
+const char* testStrings[MAXTEST] = {
     "Running Dots",
     "Opposite Dots",
+    "Random Bars",
+    "Checker Board",
 };
+// which one to use
 int nTestNumber = 0;
 
 // menu strings
@@ -137,10 +141,10 @@ const char* menuStrings[] = {
 // storage for special character
 byte chZeroPattern[8];
 
-int nMaxBackLight = 75;        // maximum backlight to use in %
-int nBackLightSeconds = 5;      // how long to leave the backlight on before dimming
-bool bBackLightOn = false;      // used by backlight timer to indicate that backlight is on
-bool bTurnOnBacklight = true;   // set to turn the backlight on, safer than calling the BackLightControl code
+int nMaxBackLight = 75;                 // maximum backlight to use in %
+int nBackLightSeconds = 5;              // how long to leave the backlight on before dimming
+volatile bool bBackLightOn = false;     // used by backlight timer to indicate that backlight is on
+volatile bool bTurnOnBacklight = true;  // set to turn the backlight on, safer than calling the BackLightControl code
 // timers to run things
 auto backLightTimer = timer_create_default();
 // this gets called every second/TIMERSTEPS
@@ -289,13 +293,15 @@ void loop() {
 
     if ((keypress == KEYSELECT) || (digitalRead(AuxButton) == LOW)) {    // The select key was pressed
         if (menuItem == mTest) {
+            lcd.clear();
             lcd.setCursor(0, 0);
             lcd.print("Running Test... ");
             lcd.setCursor(0, 1);
             lcd.print(testStrings[nTestNumber]);
             delay(initDelay * 1000);
             for (int x = repeatTimes; x > 0; x--) {
-                RunTest();
+                // run the test
+                (*testFunctions[nTestNumber])();
                 if (x > 1) {
                     delay(repeatDelay);
                 }
@@ -303,6 +309,7 @@ void loop() {
             ClearStrip();
         }
         else {
+            lcd.clear();
             lcd.setCursor(0, 0);
             lcd.print("Displaying      ");
             lcd.setCursor(0, 1);
@@ -350,8 +357,9 @@ void loop() {
             repeatDelay += 100;
         }
         else if (menuItem == mTest) {
-            if (nTestNumber < MAXTEST - 1)
-                ++nTestNumber;
+            ++nTestNumber;
+            if (nTestNumber >= MAXTEST)
+                nTestNumber = 0;
         }
         else if (menuItem == mBackLightBrightness) {
             if (nMaxBackLight < 100)
@@ -413,8 +421,9 @@ void loop() {
             }
         }
         else if (menuItem == mTest) {
-            if (nTestNumber)
-                --nTestNumber;
+            --nTestNumber;
+            if (nTestNumber < 0)
+                nTestNumber = MAXTEST - 1;
         }
         else if (menuItem == mBackLightBrightness) {
             if (nMaxBackLight > 5)
@@ -529,7 +538,7 @@ void setupLEDs() {
 
 void setupLCDdisplay() {
     lcd.begin(16, 2);
-    lcd.print("*LightWand V3.1*");
+    lcd.print("*LightWand V4.0*");
     lcd.setCursor(0, 1);
     lcd.print("Initializing...");
     delay(2000);
@@ -573,12 +582,11 @@ int ReadKeypad() {
         key = get_key(adc_key_in);            // convert into key press
         if (key != oldkey) {
             oldkey = key;
-            if (key >= 0) {
-                // turn the light on
-                bTurnOnBacklight = true;
-                return key;
-            }
         }
+    }
+    if (key != -1) {
+        // turn the light on
+        bTurnOnBacklight = true;
     }
     return key;
 }
@@ -668,28 +676,63 @@ void latchanddelay(int dur) {
 }
 
 void ClearStrip() {
-    for (int x = 0; x < stripLength; x++) {
-        strip.setPixelColor(x, 0);
-    }
+    //for (int x = 0; x < stripLength; x++) {
+    //    strip.setPixelColor(x, 0);
+    //}
+    strip.clear();
     strip.show();
 }
 
-// run a test pattern
-void RunTest()
-{
-    switch (nTestNumber) {
-    case 0:
-        WalkLight();
-        break;
-    case 1:
-        WalkOpposites();
-        break;
-    }
+// test builtin patterns
 
+// checkerboard
+void CheckerBoard()
+{
+    for (int x = 0; x < 30; ++x) {
+        // one row with BW, and the next WB
+        // write 15 pixels alternating white and black
+        for (int y = 0; y < stripLength; ++y) {
+            strip.setPixelColor(y, ((((y / 15) % 2) ^ (x % 2)) & 1) ? 0 : 127);
+        }
+        strip.show();
+        delay(frameHold);
+    }
+}
+
+// show random bars of lights, 20 times
+void RandomBars()
+{
+    byte r, g, b;
+    srand(millis());
+    char line[] = "                ";
+    lcd.setCursor(0, 1);
+    lcd.write(line, 16);
+    for (int pass = 0; pass < 20; ++pass) {
+        sprintf(line, "%2d/20", pass + 1);
+        lcd.setCursor(0, 1);
+        lcd.write(line);
+        if (pass % 2) {
+            // odd numbers, clear
+            strip.clear();
+        }
+        else {
+            // even numbers, show bar
+            r = random(0, 255);
+            g = random(0, 255);
+            b = random(0, 255);
+            fixRGBwithGamma(&r, &g, &b);
+            // fill the strip color
+            for (int ix = 0; ix < stripLength; ++ix) {
+                strip.setPixelColor(ix, r, g, b);
+            }
+        }
+        strip.show();
+        delay(frameHold);
+    }
 }
 
 // running bits
-void WalkLight()
+void RunningDot()
 {
     for (int mode = 0; mode <= 3; ++mode) {
         // RGBW
@@ -731,7 +774,7 @@ void WalkLight()
     }
 }
 
-void WalkOpposites()
+void OppositeRunningDots()
 {
     for (int mode = 0; mode <= 3; ++mode) {
         // RGBW
