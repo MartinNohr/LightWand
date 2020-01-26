@@ -230,7 +230,7 @@ void loop() {
         lcd.setCursor(0, 1);
         switch (menuItem) {
         case mSelectFile:
-            lcd.print(m_CurrentFilename);
+            DisplayCurrentFilename();
             break;
         case mStripBrightness:
             lcd.print(nStripBrightness);
@@ -293,45 +293,49 @@ void loop() {
     }
 
     if ((keypress == KEYSELECT) || (digitalRead(AuxButton) == LOW)) {    // The select key was pressed
-        if (menuItem == mTest) {
-            lcd.clear();
-            lcd.setCursor(0, 0);
-            lcd.print("Running Test... ");
-            lcd.setCursor(0, 1);
-            lcd.print(testStrings[nTestNumber]);
-            delay(initDelay * 1000);
-            for (int x = repeatTimes; x > 0; x--) {
-                // run the test
-                (*testFunctions[nTestNumber])();
-                strip.clear();
-                strip.show();
-                if (x > 1) {
-                    delay(repeatDelay);
-                }
+        char line[17];
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        if (initDelay) {
+            for (int seconds = initDelay; seconds; --seconds) {
+                lcd.setCursor(0, 0);
+                sprintf(line, "Wait: %d", seconds);
+                lcd.print(line);
+                delay(1000);
             }
         }
-        else {
+        for (int x = repeatTimes; x > 0; x--) {
             lcd.clear();
-            lcd.setCursor(0, 0);
-            lcd.print("Displaying      ");
             lcd.setCursor(0, 1);
-            lcd.print(m_CurrentFilename);
-            delay(initDelay * 1000);
-            for (int x = repeatTimes; x > 0; x--) {
-                Serial.println("sendfile");
+            if (menuItem == mTest) {
+                lcd.print(testStrings[nTestNumber]);
+            }
+            else {
+                lcd.print(m_CurrentFilename);
+            }
+            lcd.setCursor(0, 0);
+            sprintf(line, "Repeat %d", x);
+            lcd.print(line);
+            if (menuItem == mTest) {
+                // run the test
+                (*testFunctions[nTestNumber])();
+            }
+            else {
+                // output the file
                 SendFile(m_CurrentFilename);
-                strip.clear();
-                strip.show();
-                if (x > 1) {
-                    delay(repeatDelay);
-                }
+            }
+            strip.clear();
+            strip.show();
+            if (x > 1) {
+                lcd.clear();
+                lcd.setCursor(0, 0);
+                lcd.print("Repeat delay...");
+                delay(repeatDelay);
             }
         }
         lastMenuItem = -1;  // show the menu again
     }
     if (keypress == KEYRIGHT) {                    // The Right Key was Pressed
-        // redraw
-        lastMenuItem = -1;
         // redid this as if/else if because switch was crashing
         if (menuItem == mSelectFile) {
             if (m_FileIndex < m_NumberOfFiles - 1) {
@@ -383,12 +387,11 @@ void loop() {
         else if (menuItem == mAutoLoadSettings) {
             bAutoLoadSettings = !bAutoLoadSettings;
         }
+        // redraw
+        lastMenuItem = -1;
     }
 
     if (keypress == KEYLEFT) {                    // The Left Key was Pressed
-        // redraw
-        lastMenuItem = -1;
-
         if (menuItem == mSelectFile) {
             if (m_FileIndex > 0) {
                 m_FileIndex--;
@@ -450,6 +453,8 @@ void loop() {
         else if (menuItem == mAutoLoadSettings) {
             bAutoLoadSettings = !bAutoLoadSettings;
         }
+        // redraw
+        lastMenuItem = -1;
     }
 
     if ((keypress == KEYUP)) {                 // The up key was pressed
@@ -513,6 +518,8 @@ void SaveSettings(bool save, bool autoload)
         {&stripLength, sizeof stripLength},
         {&nBackLightSeconds, sizeof nBackLightSeconds},
         {&nMaxBackLight, sizeof nMaxBackLight},
+        {&m_FileIndex,sizeof m_FileIndex},
+        {&nTestNumber,sizeof nTestNumber},
     };
     for (int ix = 0; ix < (sizeof valueList / sizeof * valueList); ++ix) {
         if (save) {
@@ -526,9 +533,18 @@ void SaveSettings(bool save, bool autoload)
                     return;
                 }
             }
+            // make sure file index isn't too big
+            if (m_FileIndex >= m_NumberOfFiles) {
+                m_FileIndex = 0;
+            }
+            m_CurrentFilename = m_FileNames[0];
         }
         where = (void*)((byte*)where + valueList[ix].size);
     }
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print(save ? "Settings Saved" : "Settings Loaded");
+    delay(1000);
 }
 
 
@@ -814,6 +830,10 @@ void RandomRunningDot()
         for (int ix = 0; ix < stripLength; ++ix) {
             if (ix > 0) {
                 strip.setPixelColor(ix - 1, 0);
+            }
+            int step = random(1, 10);
+            if (step < 3) {
+                ix -= step;
             }
             strip.setPixelColor(ix, r, g, b);
             strip.show();
