@@ -93,14 +93,15 @@ int kbdPause = 0;
 unsigned long startKeyDown = 0;
 
 // built-in test patterns
-enum e_tests { mtDots = 0, mtTwoDots, mtRandomBars, mtCheckerBoard, MAXTEST };
+enum e_tests { mtDots = 0, mtTwoDots, mtRandomBars, mtCheckerBoard, mtRandomRunningDot, MAXTEST };
 // test functions, in same order as enums above
-void (*testFunctions[MAXTEST])() = { RunningDot, OppositeRunningDots, RandomBars, CheckerBoard };
+void (*testFunctions[MAXTEST])() = { RunningDot, OppositeRunningDots, RandomBars, CheckerBoard, RandomRunningDot };
 const char* testStrings[MAXTEST] = {
-    "Running Dots",
+    "Running Dot",
     "Opposite Dots",
     "Random Bars",
     "Checker Board",
+    "Random Run Dot",
 };
 // which one to use
 int nTestNumber = 0;
@@ -773,6 +774,51 @@ void RunningDot()
             strip.setPixelColor(ix, r, g, b);
             strip.show();
             delay(frameHold);
+        }
+        // remember the last one, turn it off
+        strip.setPixelColor(stripLength - 1, 0);
+        strip.show();
+    }
+}
+
+// running dot with random times
+void RandomRunningDot()
+{
+    randomSeed(millis());
+    for (int mode = 0; mode <= 3; ++mode) {
+        // RGBW
+        byte r, g, b;
+        switch (mode) {
+        case 0: // red
+            r = 255;
+            g = 0;
+            b = 0;
+            break;
+        case 1: // green
+            r = 0;
+            g = 255;
+            b = 0;
+            break;
+        case 2: // blue
+            r = 0;
+            g = 0;
+            b = 255;
+            break;
+        case 3: // white
+            r = 255;
+            g = 255;
+            b = 255;
+            break;
+        }
+        fixRGBwithGamma(&r, &g, &b);
+        for (int ix = 0; ix < stripLength; ++ix) {
+            if (ix > 0) {
+                strip.setPixelColor(ix - 1, 0);
+            }
+            strip.setPixelColor(ix, r, g, b);
+            strip.show();
+            // randomize the hold time
+            delay(random(0, frameHold * 2));
         }
         // remember the last one, turn it off
         strip.setPixelColor(stripLength - 1, 0);
