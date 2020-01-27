@@ -132,7 +132,7 @@ const char* menuStrings[] = {
     "Repeat Delay",
     "Gamma Correct",
     "Strip Length",
-    "Test Patterns",
+    "Test",
     "LCD Brightness",
     "LCD Timeout",
     "Autoload Sets",
@@ -227,6 +227,9 @@ void loop() {
         if (menuItem == mSelectFile) {
             lcd.print(" " + String(m_FileIndex + 1) + "/" + String(m_NumberOfFiles));
         }
+        if (menuItem == mTest) {
+            lcd.print(" " + String(nTestNumber + 1) + "/" + String(MAXTEST));
+        }
         lcd.setCursor(0, 1);
         switch (menuItem) {
         case mSelectFile:
@@ -291,7 +294,7 @@ void loop() {
             return;
         }
     }
-
+    // run the file selected except when test menu is up, then run the test
     if ((keypress == KEYSELECT) || (digitalRead(AuxButton) == LOW)) {    // The select key was pressed
         char line[17];
         lcd.clear();
@@ -538,6 +541,10 @@ void SaveSettings(bool save, bool autoload)
                 m_FileIndex = 0;
             }
             m_CurrentFilename = m_FileNames[0];
+            // check test number also
+            if (nTestNumber >= MAXTEST) {
+                nTestNumber = 0;
+            }
         }
         where = (void*)((byte*)where + valueList[ix].size);
     }
