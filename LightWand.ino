@@ -29,6 +29,7 @@
   Mick also added a Gamma Table from adafruit code which gives better conversion of 24 bit to
   21 bit coloring.
 
+  Feb 2020: Extensive rewrites and added features by Martin Nohr
 */
 
 // Library initialization
@@ -50,6 +51,7 @@ int b = 0;                                // Variable for the Blue Value
 int r = 0;                                // Variable for the Red Value
 
 // Initial Variable declarations and assignments (Make changes to these if you want to change defaults)
+const char signature[]{ "MLW" };          // set to make sure saved values are valid
 int stripLength = 144;                    // Set the number of LEDs the LED Strip
 int frameHold = 150;                      // default for the frame delay 
 int lastMenuItem = -1;                    // check to see if we need to redraw menu
@@ -62,9 +64,9 @@ int repeatTimes = 1;                      // Variable to keep track of number of
 int nStripBrightness = 50;                      // Variable and default for the Brightness of the strip
 bool bGammaCorrection = true;             // set to use the gamma table
 bool bAutoLoadSettings = false;           // set to automatically load saved settings
+bool bScaleHeight = false;                // scale the Y values to fit the number of pixels
 
 // Other program variable declarations, assignments, and initializations
-byte x;
 LiquidCrystal lcd(8, 9, 4, 5, 6, 7);      // Init the LCD
 
 // Declaring the two LED Strips and pin assignments to each 
@@ -78,12 +80,16 @@ int key = -1;
 int oldkey = -1;
 
 // SD Card Variables and assignments
-File root;
+#define OPEN_FOLDER_CHAR "\x7e"
+#define OPEN_PARENT_FOLDER_CHAR "\x7f"
+#define MAXFOLDERS 10
+File folders[MAXFOLDERS];
+int folderLevel = 0;
 File dataFile;
-String m_CurrentFilename = "";
-int m_FileIndex = 0;
-int m_NumberOfFiles = 0;
-String m_FileNames[200];
+String CurrentFilename = "";
+int CurrentFileIndex = 0;
+int NumberOfFiles = 0;
+String FileNames[200];
 
 // keyboard speeds up when held down longer
 #define KEYWAITPAUSE 250
@@ -116,6 +122,7 @@ enum e_menuitem {
     mRepeatDelay,
     mGammaCorrection,
     mStripLength,
+    mScaleHeight,
     mTest,
     mBackLightBrightness,
     mBackLightTimer,
@@ -132,6 +139,7 @@ const char* menuStrings[] = {
     "Repeat Delay",
     "Gamma Correct",
     "Strip Length",
+    "Scale Height",
     "Test",
     "LCD Brightness",
     "LCD Timeout",
@@ -225,7 +233,7 @@ void loop() {
         lcd.write((byte)0);
         lcd.print(menuStrings[menuItem - 1]);
         if (menuItem == mSelectFile) {
-            lcd.print(" " + String(m_FileIndex + 1) + "/" + String(m_NumberOfFiles));
+            lcd.print(" " + String(CurrentFileIndex + 1) + "/" + String(NumberOfFiles));
         }
         if (menuItem == mTest) {
             lcd.print(" " + String(nTestNumber + 1) + "/" + String(MAXTEST));
@@ -276,6 +284,9 @@ void loop() {
             lcd.print(stripLength);
             lcd.print(" pixels");
             break;
+        case mScaleHeight:
+            lcd.print(bScaleHeight ? "ON" : "OFF");
+            break;
         case mAutoLoadSettings:
             lcd.print(bAutoLoadSettings ? "ON" : "OFF");
             break;
@@ -314,18 +325,38 @@ void loop() {
                 lcd.print(testStrings[nTestNumber]);
             }
             else {
-                lcd.print(m_CurrentFilename);
+                lcd.print(CurrentFilename);
             }
             lcd.setCursor(0, 0);
-            sprintf(line, "Repeat %d", x);
-            lcd.print(line);
+            // only display if a file
+            String first(CurrentFilename[0]);
+            if (first != OPEN_FOLDER_CHAR && first != OPEN_PARENT_FOLDER_CHAR) {
+                sprintf(line, "Repeat %d", x);
+                lcd.print(line);
+            }
             if (menuItem == mTest) {
                 // run the test
                 (*testFunctions[nTestNumber])();
             }
             else {
+                // first see if a folder
+                if (CurrentFilename.startsWith(OPEN_FOLDER_CHAR)) {
+                    ++folderLevel;
+                    folders[folderLevel] = SD.open(CurrentFilename.substring(1));
+                    GetFileNamesFromSD(folders[folderLevel]);
+                    break;
+                }
+                else if (CurrentFilename.startsWith(OPEN_PARENT_FOLDER_CHAR)) {
+                    // go back a level
+                    if (folderLevel > 0) {
+                        --folderLevel;
+                        folders[folderLevel] = SD.open(folders[folderLevel].name());
+                        GetFileNamesFromSD(folders[folderLevel]);
+                    }
+                    break;
+                }
                 // output the file
-                SendFile(m_CurrentFilename);
+                SendFile(CurrentFilename);
             }
             strip.clear();
             strip.show();
@@ -341,11 +372,11 @@ void loop() {
     if (keypress == KEYRIGHT) {                    // The Right Key was Pressed
         // redid this as if/else if because switch was crashing
         if (menuItem == mSelectFile) {
-            if (m_FileIndex < m_NumberOfFiles - 1) {
-                m_FileIndex++;
+            if (CurrentFileIndex < NumberOfFiles - 1) {
+                CurrentFileIndex++;
             }
             else {
-                m_FileIndex = 0;                // On the last file so wrap round to the first file
+                CurrentFileIndex = 0;                // On the last file so wrap round to the first file
             }
             DisplayCurrentFilename();
         }
@@ -387,6 +418,9 @@ void loop() {
         else if (menuItem == mStripLength) {
             strip.updateLength(++stripLength);
         }
+        else if (menuItem == mScaleHeight) {
+            bScaleHeight = !bScaleHeight;
+        }
         else if (menuItem == mAutoLoadSettings) {
             bAutoLoadSettings = !bAutoLoadSettings;
         }
@@ -396,11 +430,11 @@ void loop() {
 
     if (keypress == KEYLEFT) {                    // The Left Key was Pressed
         if (menuItem == mSelectFile) {
-            if (m_FileIndex > 0) {
-                m_FileIndex--;
+            if (CurrentFileIndex > 0) {
+                CurrentFileIndex--;
             }
             else {
-                m_FileIndex = m_NumberOfFiles - 1;    // On the last file so wrap round to the first file
+                CurrentFileIndex = NumberOfFiles - 1;    // On the last file so wrap round to the first file
             }
             DisplayCurrentFilename();
         }
@@ -452,6 +486,9 @@ void loop() {
         else if (menuItem == mStripLength) {
             if (stripLength > 1)
                 strip.updateLength(--stripLength);
+        }
+        else if (menuItem == mScaleHeight) {
+            bScaleHeight = !bScaleHeight;
         }
         else if (menuItem == mAutoLoadSettings) {
             bAutoLoadSettings = !bAutoLoadSettings;
@@ -510,6 +547,7 @@ void SaveSettings(bool save, bool autoload)
         int size;
     };
     const saveValues valueList[] = {
+        {&signature, sizeof signature},
         {&bAutoLoadSettings, sizeof bAutoLoadSettings},
         {&nStripBrightness, sizeof nStripBrightness},
         {&frameHold, sizeof frameHold},
@@ -521,14 +559,27 @@ void SaveSettings(bool save, bool autoload)
         {&stripLength, sizeof stripLength},
         {&nBackLightSeconds, sizeof nBackLightSeconds},
         {&nMaxBackLight, sizeof nMaxBackLight},
-        {&m_FileIndex,sizeof m_FileIndex},
+        {&CurrentFileIndex,sizeof CurrentFileIndex},
         {&nTestNumber,sizeof nTestNumber},
+        {&bScaleHeight,sizeof bScaleHeight},
     };
     for (int ix = 0; ix < (sizeof valueList / sizeof * valueList); ++ix) {
         if (save) {
             eeprom_write_block(valueList[ix].val, where, valueList[ix].size);
         }
         else {  // load
+            // check signature
+            char svalue[sizeof signature];
+            eeprom_read_block(svalue, where, sizeof svalue);
+            if (strncmp(svalue, signature, sizeof signature)) {
+                lcd.clear();
+                lcd.setCursor(0, 0);
+                lcd.print("invalid signature");
+                lcd.setCursor(0, 1);
+                lcd.print(svalue);
+                delay(1000);
+                return;
+            }
             eeprom_read_block(valueList[ix].val, where, valueList[ix].size);
             // if autoload, exit if the save value is not true
             if (autoload && ix == 0) {
@@ -537,10 +588,10 @@ void SaveSettings(bool save, bool autoload)
                 }
             }
             // make sure file index isn't too big
-            if (m_FileIndex >= m_NumberOfFiles) {
-                m_FileIndex = 0;
+            if (CurrentFileIndex >= NumberOfFiles) {
+                CurrentFileIndex = 0;
             }
-            m_CurrentFilename = m_FileNames[0];
+            CurrentFilename = FileNames[0];
             // check test number also
             if (nTestNumber >= MAXTEST) {
                 nTestNumber = 0;
@@ -586,13 +637,12 @@ void setupSDcard() {
     lcd.clear();
     lcd.print("SD init done    ");
     delay(1000);
-    root = SD.open("/");
+    folders[folderLevel = 0] = SD.open("/");
     lcd.clear();
     lcd.print("Reading SD...   ");
     delay(500);
-    GetFileNamesFromSD(root);
-    isort(m_FileNames, m_NumberOfFiles);
-    m_CurrentFilename = m_FileNames[0];
+    GetFileNamesFromSD(folders[CurrentFileIndex]);
+    CurrentFilename = FileNames[0];
     DisplayCurrentFilename();
 }
 
@@ -632,11 +682,21 @@ int get_key(unsigned int input) {
     return k;
 }
 
+// build the folder path
+String GetFilePath()
+{
+    String path;
+    for (int ix = 0; ix <= folderLevel; ++ix) {
+        path += folders[ix].name();
+    }
+    return path + "/";
+}
+
 void SendFile(String Filename) {
     char temp[14];
     Filename.toCharArray(temp, 14);
-
-    dataFile = SD.open(temp);
+    String fn = GetFilePath() + temp;
+    dataFile = SD.open(fn);
 
     // if the file is available send it to the LED's
     if (dataFile) {
@@ -645,9 +705,9 @@ void SendFile(String Filename) {
     }
     else {
         lcd.clear();
-        lcd.print("  Error reading ");
-        lcd.setCursor(4, 1);
-        lcd.print("file");
+        lcd.print("* Error reading ");
+        lcd.setCursor(0, 1);
+        lcd.print(CurrentFilename);
         bBackLightOn = true;
         delay(1000);
         lcd.clear();
@@ -657,41 +717,51 @@ void SendFile(String Filename) {
 }
 
 void DisplayCurrentFilename() {
-    m_CurrentFilename = m_FileNames[m_FileIndex];
+    CurrentFilename = FileNames[CurrentFileIndex];
     lcd.setCursor(0, 1);
     lcd.print("                ");
     lcd.setCursor(0, 1);
-    lcd.print(m_CurrentFilename);
+    lcd.print(CurrentFilename);
 }
 
 
 
 void GetFileNamesFromSD(File dir) {
-    int fileCount = 0;
+    NumberOfFiles = 0;
+    CurrentFileIndex = 0;
     String CurrentFilename = "";
+    if (strcmp(dir.name(), "/") != 0) {
+        // add an arrow to go back
+        FileNames[NumberOfFiles++] = String(OPEN_PARENT_FOLDER_CHAR) + folders[folderLevel].name();
+    }
     while (1) {
         File entry = dir.openNextFile();
         if (!entry) {
             // no more files
-            m_NumberOfFiles = fileCount;
             entry.close();
             break;
         }
         else {
             if (entry.isDirectory()) {
-                //GetNextFileName(root);
+                CurrentFilename = entry.name();
+                CurrentFilename.toUpperCase();
+                if (!CurrentFilename.startsWith("SYSTEM\x7e")) {
+                    FileNames[NumberOfFiles] = String(OPEN_FOLDER_CHAR) + entry.name();
+                    NumberOfFiles++;
+                }
             }
             else {
                 CurrentFilename = entry.name();
                 CurrentFilename.toUpperCase();
                 if (CurrentFilename.endsWith(".bmp") || CurrentFilename.endsWith(".BMP")) { //find files with our extension only
-                    m_FileNames[fileCount] = entry.name();
-                    fileCount++;
+                    FileNames[NumberOfFiles] = entry.name();
+                    NumberOfFiles++;
                 }
             }
         }
         entry.close();
     }
+    isort(FileNames, NumberOfFiles);
 }
 
 
@@ -752,9 +822,10 @@ void RandomBars()
             b = random(0, 255);
             fixRGBwithGamma(&r, &g, &b);
             // fill the strip color
-            for (int ix = 0; ix < stripLength; ++ix) {
-                strip.setPixelColor(ix, r, g, b);
-            }
+            strip.fill(strip.Color(r, g, b), 0, stripLength);
+            //for (int ix = 0; ix < stripLength; ++ix) {
+            //    strip.setPixelColor(ix, r, g, b);
+            //}
         }
         strip.show();
         delay(frameHold);
@@ -941,15 +1012,21 @@ int readByte() {
 
 
 void getRGBwithGamma() {
-    g = gamma(readByte()) / (101 - nStripBrightness);
-    b = gamma(readByte()) / (101 - nStripBrightness);
-    r = gamma(readByte()) / (101 - nStripBrightness);
+    g = strip.gamma8(readByte()) / (101 - nStripBrightness);
+    b = strip.gamma8(readByte()) / (101 - nStripBrightness);
+    r = strip.gamma8(readByte()) / (101 - nStripBrightness);
+    //g = gamma(readByte()) / (101 - nStripBrightness);
+    //b = gamma(readByte()) / (101 - nStripBrightness);
+    //r = gamma(readByte()) / (101 - nStripBrightness);
 }
 
 void fixRGBwithGamma(byte* rp, byte* gp, byte* bp) {
-    *gp = gamma(*gp) / (101 - nStripBrightness);
-    *bp = gamma(*bp) / (101 - nStripBrightness);
-    *rp = gamma(*rp) / (101 - nStripBrightness);
+    *gp = strip.gamma8(*gp) / (101 - nStripBrightness);
+    *bp = strip.gamma8(*bp) / (101 - nStripBrightness);
+    *rp = strip.gamma8(*rp) / (101 - nStripBrightness);
+    //*gp = gamma(*gp) / (101 - nStripBrightness);
+    //*bp = gamma(*bp) / (101 - nStripBrightness);
+    //*rp = gamma(*rp) / (101 - nStripBrightness);
 }
 
 
@@ -1012,6 +1089,7 @@ void ReadTheFile() {
 
     /* compute the line length */
     uint32_t lineLength = imgWidth * 3;
+    // fix for padding to 4 byte words
     if ((lineLength % 4) != 0)
         lineLength = (lineLength / 4 + 1) * 4;
 
@@ -1028,14 +1106,15 @@ void ReadTheFile() {
         sprintf(num, "%4d", y);
         lcd.print(num);
         int bufpos = 0;
+        uint32_t offset = (MYBMP_BF_OFF_BITS + ((y - 1) * lineLength));
+        dataFile.seek(offset);
         for (int x = 0; x < displayWidth; x++) {
-            uint32_t offset = (MYBMP_BF_OFF_BITS + (((y - 1) * lineLength) + (x * 3)));
-            dataFile.seek(offset);
-
             getRGBwithGamma();
-
+            // see if we want this one
+            if (bScaleHeight && (x * displayWidth) % imgWidth) {
+                continue;
+            }
             strip.setPixelColor(x, r, b, g);
-
         }
         latchanddelay(frameHold);
     }
