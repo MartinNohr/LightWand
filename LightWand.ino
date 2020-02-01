@@ -341,9 +341,18 @@ void loop() {
             else {
                 // first see if a folder
                 if (CurrentFilename.startsWith(OPEN_FOLDER_CHAR)) {
-                    ++folderLevel;
-                    folders[folderLevel] = SD.open(CurrentFilename.substring(1));
-                    GetFileNamesFromSD(folders[folderLevel]);
+                    if (folderLevel < MAXFOLDERS - 1) {
+                        ++folderLevel;
+                        folders[folderLevel] = SD.open(CurrentFilename.substring(1));
+                        GetFileNamesFromSD(folders[folderLevel]);
+                    }
+                    else {
+                        lcd.clear();
+                        lcd.setCursor(0, 0);
+                        lcd.print("MAX " + MAXFOLDERS);
+                        lcd.setCursor(0, 1);
+                        lcd.print("FOLDERS");
+                    }
                     break;
                 }
                 else if (CurrentFilename.startsWith(OPEN_PARENT_FOLDER_CHAR)) {
