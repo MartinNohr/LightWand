@@ -44,8 +44,7 @@
 #define BACKLIGHT 10                      // Pin used for the LCD Backlight
 #define SDssPin 53                        // SD card CS pin
 int NPPin = 31;                           // Data Pin for the NeoPixel LED Strip
-int AuxButton = 44;                       // Aux Select Button Pin
-int AuxButtonGND = 45;                    // Aux Select Button Ground Pin
+int AuxButton = 35;                       // Aux Select Button Pin
 int g = 0;                                // Variable for the Green Value
 int b = 0;                                // Variable for the Blue Value
 int r = 0;                                // Variable for the Red Value
@@ -65,6 +64,7 @@ int nStripBrightness = 50;                      // Variable and default for the 
 bool bGammaCorrection = true;             // set to use the gamma table
 bool bAutoLoadSettings = false;           // set to automatically load saved settings
 bool bScaleHeight = false;                // scale the Y values to fit the number of pixels
+bool bCancelRun = false;                  // set to cancel a running job
 
 // Other program variable declarations, assignments, and initializations
 LiquidCrystal lcd(8, 9, 4, 5, 6, 7);      // Init the LCD
@@ -197,10 +197,7 @@ void setup() {
     Serial.begin(115200);
     Serial.println("Starting setup");
 
-    pinMode(AuxButton, INPUT);
-    digitalWrite(AuxButton, HIGH);
-    pinMode(AuxButtonGND, OUTPUT);
-    digitalWrite(AuxButtonGND, LOW);
+    pinMode(AuxButton, INPUT_PULLUP);
 
     setupLEDs();
     setupLCDdisplay();
@@ -369,6 +366,10 @@ void loop() {
             }
             strip.clear();
             strip.show();
+            if (bCancelRun) {
+                bCancelRun = false;
+                break;
+            }
             if (x > 1) {
                 lcd.clear();
                 lcd.setCursor(0, 0);
@@ -709,7 +710,7 @@ void SendFile(String Filename) {
 
     // if the file is available send it to the LED's
     if (dataFile) {
-        ReadTheFile();
+        ReadAndDisplayFile();
         dataFile.close();
     }
     else {
@@ -741,7 +742,7 @@ void GetFileNamesFromSD(File dir) {
     String CurrentFilename = "";
     if (strcmp(dir.name(), "/") != 0) {
         // add an arrow to go back
-        FileNames[NumberOfFiles++] = String(OPEN_PARENT_FOLDER_CHAR) + folders[folderLevel].name();
+        FileNames[NumberOfFiles++] = String(OPEN_PARENT_FOLDER_CHAR) + folders[folderLevel - 1].name();
     }
     while (1) {
         File entry = dir.openNextFile();
@@ -1047,7 +1048,7 @@ void fixRGBwithGamma(byte* rp, byte* gp, byte* bp) {
 }
 
 
-void ReadTheFile() {
+void ReadAndDisplayFile() {
 #define MYBMP_BF_TYPE           0x4D42
 #define MYBMP_BF_OFF_BITS       54
 #define MYBMP_BI_SIZE           40
@@ -1144,6 +1145,10 @@ void ReadTheFile() {
             while (true) {
                 key = ReadKeypad();
                 if (key == KEYSELECT) {
+                    // cancel here
+                    while (ReadKeypad() != KEYNONE)
+                        ;
+                    bCancelRun = true;
                     return;
                 }
                 else if (key == KEYNONE)
