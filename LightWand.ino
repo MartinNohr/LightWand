@@ -814,12 +814,12 @@ void RandomBars()
     byte r, g, b;
     srand(millis());
     char line[] = "                ";
-    lcd.setCursor(0, 1);
-    lcd.write(line, 16);
-    for (int pass = 0; pass < 20; ++pass) {
-        sprintf(line, "%2d/20", pass + 1);
-        lcd.setCursor(0, 1);
-        lcd.write(line);
+//    lcd.setCursor(0, 1);
+//    lcd.write(line, 16);
+    for (int pass = 0; pass < 50; ++pass) {
+        sprintf(line, "%2d/50", pass + 1);
+        lcd.setCursor(10, 0);
+        lcd.print(line);
         if (pass % 2) {
             // odd numbers, clear
             strip.clear();
@@ -870,7 +870,11 @@ void RunningDot()
             break;
         }
         fixRGBwithGamma(&r, &g, &b);
+        char line[10];
         for (int ix = 0; ix < stripLength; ++ix) {
+            lcd.setCursor(11, 0);
+            sprintf(line, "%3d", ix);
+            lcd.print(line);
             if (ix > 0) {
                 strip.setPixelColor(ix - 1, 0);
             }
@@ -914,7 +918,11 @@ void RandomRunningDot()
             break;
         }
         fixRGBwithGamma(&r, &g, &b);
+        char line[10];
         for (int ix = 0; ix < stripLength; ++ix) {
+            lcd.setCursor(11, 0);
+            sprintf(line, "%3d", ix);
+            lcd.print(line);
             if (ix > 0) {
                 strip.setPixelColor(ix - 1, 0);
             }
