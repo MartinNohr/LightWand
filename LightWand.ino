@@ -1134,6 +1134,27 @@ void ReadTheFile() {
             strip.setPixelColor(x, r, b, g);
         }
         latchanddelay(frameHold);
+        // check keys
+        int key = ReadKeypad();
+        if (key == KEYSELECT) {
+            lcd.setCursor(0, 0);
+            lcd.print("Select to cancel");
+            while (ReadKeypad() != KEYNONE)
+                ;
+            while (true) {
+                key = ReadKeypad();
+                if (key == KEYSELECT) {
+                    return;
+                }
+                else if (key == KEYNONE)
+                    continue;
+                else {
+                    lcd.setCursor(0, 0);
+                    lcd.print("                ");
+                    break;
+                }
+            }
+        }
     }
 }
 
