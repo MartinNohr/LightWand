@@ -304,6 +304,9 @@ void loop() {
     }
     // run the file selected except when test menu is up, then run the test
     if ((keypress == KEYSELECT) || (digitalRead(AuxButton) == LOW)) {    // The select key was pressed
+        // don't run until key released
+        while (ReadKeypad() != KEYNONE)
+            ;
         char line[17];
         lcd.clear();
         lcd.setCursor(0, 0);
