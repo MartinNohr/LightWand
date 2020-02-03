@@ -664,17 +664,24 @@ void SaveSettings(bool save, bool autoload)
                     return;
                 }
             }
-            // make sure file index isn't too big
-            if (CurrentFileIndex >= NumberOfFiles) {
-                CurrentFileIndex = 0;
-            }
-            CurrentFilename = FileNames[CurrentFileIndex];
-            // check test number also
-            if (nTestNumber >= MAXTEST) {
-                nTestNumber = 0;
-            }
         }
         blockpointer = (void*)((byte*)blockpointer + valueList[ix].size);
+    }
+    if (!save) {
+        int savedFileIndex = CurrentFileIndex;
+        // we don't know the folder path, so just reset the folder level
+        folderLevel = 0;
+        setupSDcard();
+        CurrentFileIndex = savedFileIndex;
+        // make sure file index isn't too big
+        if (CurrentFileIndex >= NumberOfFiles) {
+            CurrentFileIndex = 0;
+        }
+        CurrentFilename = FileNames[CurrentFileIndex];
+        // check test number also
+        if (nTestNumber >= MAXTEST) {
+            nTestNumber = 0;
+        }
     }
     lcd.clear();
     lcd.setCursor(0, 0);
