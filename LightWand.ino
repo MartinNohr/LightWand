@@ -42,7 +42,7 @@
 
 // Pin assignments for the Arduino (Make changes to these if you use different Pins)
 #define BACKLIGHT 10                      // Pin used for the LCD Backlight
-#define SDssPin 53                        // SD card CS pin
+#define SDcsPin 53                        // SD card CS pin
 int NPPin = 31;                           // Data Pin for the NeoPixel LED Strip
 int AuxButton = 35;                       // Aux Select Button Pin
 int g = 0;                                // Variable for the Green Value
@@ -52,7 +52,7 @@ int r = 0;                                // Variable for the Red Value
 // Initial Variable declarations and assignments (Make changes to these if you want to change defaults)
 const char signature[]{ "MLW" };          // set to make sure saved values are valid
 int stripLength = 144;                    // Set the number of LEDs the LED Strip
-int frameHold = 150;                      // default for the frame delay 
+int frameHold = 100;                      // default for the frame delay 
 int lastMenuItem = -1;                    // check to see if we need to redraw menu
 int menuItem = 1;                         // Variable for current main menu selection
 int initDelay = 0;                        // Variable for delay between button press and start of light sequence, in seconds
@@ -65,6 +65,7 @@ bool bGammaCorrection = true;             // set to use the gamma table
 bool bAutoLoadSettings = false;           // set to automatically load saved settings
 bool bScaleHeight = false;                // scale the Y values to fit the number of pixels
 bool bCancelRun = false;                  // set to cancel a running job
+bool bChainFiles = false;            // set to run all the files from current to the last one in the current folder
 
 // Other program variable declarations, assignments, and initializations
 LiquidCrystal lcd(8, 9, 4, 5, 6, 7);      // Init the LCD
@@ -80,8 +81,8 @@ int key = -1;
 int oldkey = -1;
 
 // SD Card Variables and assignments
-#define OPEN_FOLDER_CHAR "\x7e"
-#define OPEN_PARENT_FOLDER_CHAR "\x7f"
+#define OPEN_FOLDER_CHAR '\x7e'
+#define OPEN_PARENT_FOLDER_CHAR '\x7f'
 #define MAXFOLDERS 10
 File folders[MAXFOLDERS];
 int folderLevel = 0;
@@ -115,6 +116,7 @@ int nTestNumber = 0;
 // menu strings
 enum e_menuitem {
     mSelectFile = 1,
+    mChainFiles,
     mStripBrightness,
     mInitDelay,
     mFrameHoldTime,
@@ -132,6 +134,7 @@ enum e_menuitem {
 };
 const char* menuStrings[] = {
     "File",
+    "Chain Files",
     "Brightness",
     "Init Delay",
     "Frame Time",
@@ -240,6 +243,9 @@ void loop() {
         case mSelectFile:
             DisplayCurrentFilename();
             break;
+        case mChainFiles:
+            lcd.print(bChainFiles ? "ON" : "OFF");
+            break;
         case mStripBrightness:
             lcd.print(nStripBrightness);
             if (nStripBrightness == 100) {
@@ -307,78 +313,25 @@ void loop() {
         // don't run until key released
         while (ReadKeypad() != KEYNONE)
             ;
-        char line[17];
-        lcd.clear();
-        lcd.setCursor(0, 0);
-        if (initDelay) {
-            for (int seconds = initDelay; seconds; --seconds) {
-                lcd.setCursor(0, 0);
-                sprintf(line, "Wait: %d", seconds);
-                lcd.print(line);
-                delay(1000);
-            }
-        }
-        for (int x = repeatTimes; x > 0; x--) {
-            lcd.clear();
-            lcd.setCursor(0, 1);
-            if (menuItem == mTest) {
-                lcd.print(testStrings[nTestNumber]);
-            }
-            else {
-                lcd.print(CurrentFilename);
-            }
-            lcd.setCursor(0, 0);
-            // only display if a file
-            String first(CurrentFilename[0]);
-            if (first != OPEN_FOLDER_CHAR && first != OPEN_PARENT_FOLDER_CHAR) {
-                sprintf(line, "Repeat %d", x);
-                lcd.print(line);
-            }
-            if (menuItem == mTest) {
-                // run the test
-                (*testFunctions[nTestNumber])();
-            }
-            else {
-                // first see if a folder
-                if (CurrentFilename.startsWith(OPEN_FOLDER_CHAR)) {
-                    if (folderLevel < MAXFOLDERS - 1) {
-                        ++folderLevel;
-                        folders[folderLevel] = SD.open(CurrentFilename.substring(1));
-                        GetFileNamesFromSD(folders[folderLevel]);
-                    }
-                    else {
-                        lcd.clear();
-                        lcd.setCursor(0, 0);
-                        lcd.print("MAX " + MAXFOLDERS);
-                        lcd.setCursor(0, 1);
-                        lcd.print("FOLDERS");
-                    }
+        int chainNumber = FileCountOnly() - CurrentFileIndex;
+        bool isFolder = ProcessFileOrTest(bChainFiles ? chainNumber : 0);
+        isFolder |= FileNames[CurrentFileIndex][0]==OPEN_FOLDER_CHAR
+            || FileNames[CurrentFileIndex][0]==OPEN_PARENT_FOLDER_CHAR;
+        // check if file chaining is on
+        if (!isFolder && bChainFiles) {
+            // save our settings and process files to the end of the list
+            int savedFileIndex = CurrentFileIndex;
+            while (CurrentFileIndex < NumberOfFiles - 1) {
+                --chainNumber;
+                ++CurrentFileIndex;
+                // stop on folder
+                if (FileNames[CurrentFileIndex][0] == OPEN_FOLDER_CHAR
+                    || FileNames[CurrentFileIndex][0] == OPEN_PARENT_FOLDER_CHAR)
                     break;
-                }
-                else if (CurrentFilename.startsWith(OPEN_PARENT_FOLDER_CHAR)) {
-                    // go back a level
-                    if (folderLevel > 0) {
-                        --folderLevel;
-                        folders[folderLevel] = SD.open(folders[folderLevel].name());
-                        GetFileNamesFromSD(folders[folderLevel]);
-                    }
-                    break;
-                }
-                // output the file
-                SendFile(CurrentFilename);
+                DisplayCurrentFilename();
+                ProcessFileOrTest(chainNumber);
             }
-            strip.clear();
-            strip.show();
-            if (bCancelRun) {
-                bCancelRun = false;
-                break;
-            }
-            if (x > 1) {
-                lcd.clear();
-                lcd.setCursor(0, 0);
-                lcd.print("Repeat delay...");
-                delay(repeatDelay);
-            }
+            CurrentFileIndex = savedFileIndex;
         }
         lastMenuItem = -1;  // show the menu again
     }
@@ -392,6 +345,9 @@ void loop() {
                 CurrentFileIndex = 0;                // On the last file so wrap round to the first file
             }
             DisplayCurrentFilename();
+        }
+        else if (menuItem == mChainFiles) {
+            bChainFiles = !bChainFiles;
         }
         else if (menuItem == mStripBrightness) {
             if (nStripBrightness < 100) {
@@ -450,6 +406,9 @@ void loop() {
                 CurrentFileIndex = NumberOfFiles - 1;    // On the last file so wrap round to the first file
             }
             DisplayCurrentFilename();
+        }
+        else if (menuItem == mChainFiles) {
+            bChainFiles = !bChainFiles;
         }
         else if (menuItem == mStripBrightness) {
             if (nStripBrightness > 1) {
@@ -550,11 +509,115 @@ void loop() {
     }
 }
 
+// count the actual files
+int FileCountOnly()
+{
+    int count = 0;
+    // ignore folders, at the end
+    char start = FileNames[0][0];
+    while (start != OPEN_FOLDER_CHAR && start != OPEN_PARENT_FOLDER_CHAR) {
+        ++count;
+        start = FileNames[count][0];
+    }
+    return count;
+}
+
+// returns true if the folder was changed
+bool ProcessFileOrTest(int chainnumber)
+{
+    bool bFolderChanged = false;
+    char line[17];
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    if (initDelay) {
+        for (int seconds = initDelay; seconds; --seconds) {
+            lcd.setCursor(0, 0);
+            sprintf(line, "Wait: %d", seconds);
+            lcd.print(line);
+            delay(1000);
+        }
+    }
+    for (int x = repeatTimes; x > 0; x--) {
+        lcd.clear();
+        lcd.setCursor(0, 1);
+        if (menuItem == mTest) {
+            lcd.print(testStrings[nTestNumber]);
+        }
+        else {
+            lcd.print(CurrentFilename);
+        }
+        if (chainnumber) {
+            lcd.setCursor(13, 1);
+            char line[10];
+            sprintf(line, "%2d", chainnumber);
+            lcd.print(line);
+        }
+        lcd.setCursor(0, 0);
+        // only display if a file
+        char first = CurrentFilename[0];
+        if (first != OPEN_FOLDER_CHAR && first != OPEN_PARENT_FOLDER_CHAR) {
+            sprintf(line, "Repeat %d", x);
+            lcd.print(line);
+        }
+        if (menuItem == mTest) {
+            // run the test
+            (*testFunctions[nTestNumber])();
+        }
+        else {
+            // first see if a folder
+            if (first == OPEN_FOLDER_CHAR) {
+                if (folderLevel < MAXFOLDERS - 1) {
+                    ++folderLevel;
+                    folders[folderLevel] = SD.open(CurrentFilename.substring(1));
+                    GetFileNamesFromSD(folders[folderLevel]);
+                }
+                else {
+                    lcd.clear();
+                    lcd.setCursor(0, 0);
+                    lcd.print("MAX " + MAXFOLDERS);
+                    lcd.setCursor(0, 1);
+                    lcd.print("FOLDERS");
+                }
+                // stop if folder
+                bFolderChanged = true;
+                break;
+            }
+            else if (first == OPEN_PARENT_FOLDER_CHAR) {
+                // go back a level
+                if (folderLevel > 0) {
+                    --folderLevel;
+                    folders[folderLevel] = SD.open(folders[folderLevel].name());
+                    GetFileNamesFromSD(folders[folderLevel]);
+                }
+                // stop if folder
+                bFolderChanged = true;
+                break;
+            }
+            //CurrentFilename = FileNames[CurrentFileIndex];
+            // output the file
+            SendFile(CurrentFilename);
+        }
+        strip.clear();
+        strip.show();
+        if (bCancelRun) {
+            bCancelRun = false;
+            break;
+        }
+        if (x > 1) {
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("Repeat delay...");
+            delay(repeatDelay);
+        }
+    }
+}
+
+
 // save some settings in the eeprom
 // if autoload is true, check the first flag, and load the rest if it is true
 void SaveSettings(bool save, bool autoload)
 {
-    void* where = (void*)NULL;
+    void* blockpointer = (void*)NULL;
     struct saveValues {
         void* val;
         int size;
@@ -575,25 +638,26 @@ void SaveSettings(bool save, bool autoload)
         {&CurrentFileIndex,sizeof CurrentFileIndex},
         {&nTestNumber,sizeof nTestNumber},
         {&bScaleHeight,sizeof bScaleHeight},
+        {&bChainFiles,sizeof bChainFiles},
     };
     for (int ix = 0; ix < (sizeof valueList / sizeof * valueList); ++ix) {
         if (save) {
-            eeprom_write_block(valueList[ix].val, where, valueList[ix].size);
+            eeprom_write_block(valueList[ix].val, blockpointer, valueList[ix].size);
         }
         else {  // load
             // check signature
             char svalue[sizeof signature];
-            eeprom_read_block(svalue, where, sizeof svalue);
+            eeprom_read_block(svalue, (void*)NULL, sizeof svalue);
             if (strncmp(svalue, signature, sizeof signature)) {
                 lcd.clear();
                 lcd.setCursor(0, 0);
-                lcd.print("invalid signature");
+                lcd.print("bad signature");
                 lcd.setCursor(0, 1);
                 lcd.print(svalue);
                 delay(1000);
                 return;
             }
-            eeprom_read_block(valueList[ix].val, where, valueList[ix].size);
+            eeprom_read_block(valueList[ix].val, blockpointer, valueList[ix].size);
             // if autoload, exit if the save value is not true
             if (autoload && ix == 0) {
                 if (!bAutoLoadSettings) {
@@ -604,13 +668,13 @@ void SaveSettings(bool save, bool autoload)
             if (CurrentFileIndex >= NumberOfFiles) {
                 CurrentFileIndex = 0;
             }
-            CurrentFilename = FileNames[0];
+            CurrentFilename = FileNames[CurrentFileIndex];
             // check test number also
             if (nTestNumber >= MAXTEST) {
                 nTestNumber = 0;
             }
         }
-        where = (void*)((byte*)where + valueList[ix].size);
+        blockpointer = (void*)((byte*)blockpointer + valueList[ix].size);
     }
     lcd.clear();
     lcd.setCursor(0, 0);
@@ -628,7 +692,7 @@ void setupLEDs() {
 
 void setupLCDdisplay() {
     lcd.begin(16, 2);
-    lcd.print("*LightWand V4.0*");
+    lcd.print("LightWand V4.1");
     lcd.setCursor(0, 1);
     lcd.print("Initializing...");
     delay(2000);
@@ -638,9 +702,9 @@ void setupLCDdisplay() {
 
 
 void setupSDcard() {
-    pinMode(SDssPin, OUTPUT);
+    pinMode(SDcsPin, OUTPUT);
 
-    while (!SD.begin(SDssPin)) {
+    while (!SD.begin(SDcsPin)) {
         bBackLightOn = true;
         lcd.print("SD init failed! ");
         delay(1000);
@@ -654,7 +718,7 @@ void setupSDcard() {
     lcd.clear();
     lcd.print("Reading SD...   ");
     delay(500);
-    GetFileNamesFromSD(folders[CurrentFileIndex]);
+    GetFileNamesFromSD(folders[folderLevel]);
     CurrentFilename = FileNames[0];
     DisplayCurrentFilename();
 }
