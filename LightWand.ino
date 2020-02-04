@@ -100,15 +100,16 @@ int kbdPause = 0;
 unsigned long startKeyDown = 0;
 
 // built-in test patterns
-enum e_tests { mtDots = 0, mtTwoDots, mtRandomBars, mtCheckerBoard, mtRandomRunningDot, MAXTEST };
+enum e_tests { mtDots = 0, mtTwoDots, mtRandomBars, mtCheckerBoard, mtRandomRunningDot, mtBarberPole, MAXTEST };
 // test functions, in same order as enums above
-void (*testFunctions[MAXTEST])() = { RunningDot, OppositeRunningDots, RandomBars, CheckerBoard, RandomRunningDot };
+void (*testFunctions[MAXTEST])() = { RunningDot, OppositeRunningDots, RandomBars, CheckerBoard, RandomRunningDot, BarberPole };
 const char* testStrings[MAXTEST] = {
     "Running Dot",
     "Opposite Dots",
     "Random Bars",
     "Checker Board",
     "Random Run Dot",
+    "Barber Pole",
 };
 // which one to use
 int nTestNumber = 0;
@@ -1068,6 +1069,35 @@ void OppositeRunningDots()
     }
 }
 
+void BarberPole()
+{
+    uint32_t red, white, blue, color;
+    red = strip.Color(127, 0, 0);
+    white = strip.Color(127, 127, 127);
+    blue = strip.Color(0, 0, 127);
+
+    for (int loop = 0; loop < 40; ++loop) {
+        for (int ledIx = 0; ledIx < stripLength; ++ledIx) {
+            // figure out what color
+            switch (((ledIx + loop) % 40) / 10) {
+            case 0: // red
+                color = red;
+                break;
+            case 1: // white
+            case 3:
+                color = white;
+                break;
+            case 2: // blue
+                color = blue;
+                break;
+            }
+            strip.setPixelColor(ledIx, color);
+        }
+        latchanddelay(frameHold);
+    }
+}
+
+
 uint32_t readLong() {
     uint32_t retValue;
     byte incomingbyte;
@@ -1212,9 +1242,10 @@ void ReadAndDisplayFile() {
             lcd.print(num);
         }
         int bufpos = 0;
-        uint32_t offset = (MYBMP_BF_OFF_BITS + ((y - 1) * lineLength));
-        dataFile.seek(offset);
+        //uint32_t offset = (MYBMP_BF_OFF_BITS + ((y - 1) * lineLength));
+        //dataFile.seek(offset);
         for (int x = 0; x < displayWidth; x++) {
+            dataFile.seek((uint32_t)MYBMP_BF_OFF_BITS + (((y - 1) * lineLength) + (x * 3)));
             getRGBwithGamma();
             // see if we want this one
             if (bScaleHeight && (x * displayWidth) % imgWidth) {
