@@ -50,17 +50,17 @@ int b = 0;                                // Variable for the Blue Value
 int r = 0;                                // Variable for the Red Value
 
 // Initial Variable declarations and assignments (Make changes to these if you want to change defaults)
-const char signature[]{ "MLW" };          // set to make sure saved values are valid
+char signature[]{ "MLW" };                // set to make sure saved values are valid
 int stripLength = 144;                    // Set the number of LEDs the LED Strip
-int frameHold = 100;                      // default for the frame delay 
+int frameHold = 25;                       // default for the frame delay 
 int lastMenuItem = -1;                    // check to see if we need to redraw menu
 int menuItem = 1;                         // Variable for current main menu selection
 int initDelay = 0;                        // Variable for delay between button press and start of light sequence, in seconds
 int repeat = 0;                           // Variable to select auto repeat (until select button is pressed again)
 int repeatDelay = 0;                      // Variable for delay between repeats
 int updateMode = 0;                       // Variable to keep track of update Modes
-int repeatTimes = 1;                      // Variable to keep track of number of repeats
-int nStripBrightness = 50;                      // Variable and default for the Brightness of the strip
+int repeatCount = 1;                      // Variable to keep track of number of repeats
+int nStripBrightness = 50;                // Variable and default for the Brightness of the strip
 bool bGammaCorrection = true;             // set to use the gamma table
 bool bAutoLoadSettings = false;           // set to automatically load saved settings
 bool bScaleHeight = false;                // scale the Y values to fit the number of pixels
@@ -116,12 +116,12 @@ int nTestNumber = 0;
 // menu strings
 enum e_menuitem {
     mSelectFile = 1,
-    mChainFiles,
+    mFrameHoldTime,
     mStripBrightness,
     mInitDelay,
-    mFrameHoldTime,
-    mRepeatTimes,
+    mRepeatCount,
     mRepeatDelay,
+    mChainFiles,
     mGammaCorrection,
     mStripLength,
     mScaleHeight,
@@ -134,12 +134,12 @@ enum e_menuitem {
 };
 const char* menuStrings[] = {
     "File",
-    "Chain Files",
+    "Frame Time",
     "Brightness",
     "Init Delay",
-    "Frame Time",
-    "Repeat Times",
+    "Repeat Count",
     "Repeat Delay",
+    "Chain Files",
     "Gamma Correct",
     "Strip Length",
     "Scale Height",
@@ -154,7 +154,7 @@ const char* menuStrings[] = {
 byte chZeroPattern[8];
 
 int nMaxBackLight = 75;                 // maximum backlight to use in %
-int nBackLightSeconds = 5;              // how long to leave the backlight on before dimming
+int nBackLightSeconds = 10;             // how long to leave the backlight on before dimming
 volatile bool bBackLightOn = false;     // used by backlight timer to indicate that backlight is on
 volatile bool bTurnOnBacklight = true;  // set to turn the backlight on, safer than calling the BackLightControl code
 // timers to run things
@@ -262,8 +262,8 @@ void loop() {
         case mFrameHoldTime:
             lcd.print(String(frameHold) + " mSec");
             break;
-        case mRepeatTimes:
-            lcd.print(repeatTimes);
+        case mRepeatCount:
+            lcd.print(repeatCount);
             break;
         case mRepeatDelay:
             lcd.print(String(repeatDelay) + " mSec");
@@ -310,180 +310,26 @@ void loop() {
     }
     // run the file selected except when test menu is up, then run the test
     if ((keypress == KEYSELECT) || (digitalRead(AuxButton) == LOW)) {    // The select key was pressed
-        // don't run until key released
-        while (ReadKeypad() != KEYNONE)
-            ;
-        int chainNumber = FileCountOnly() - CurrentFileIndex;
-        bool isFolder = ProcessFileOrTest(bChainFiles ? chainNumber : 0);
-        isFolder |= FileNames[CurrentFileIndex][0]==OPEN_FOLDER_CHAR
-            || FileNames[CurrentFileIndex][0]==OPEN_PARENT_FOLDER_CHAR;
-        // check if file chaining is on
-        if (!isFolder && bChainFiles) {
-            // save our settings and process files to the end of the list
-            int savedFileIndex = CurrentFileIndex;
-            while (CurrentFileIndex < NumberOfFiles - 1) {
-                --chainNumber;
-                ++CurrentFileIndex;
-                // stop on folder
-                if (FileNames[CurrentFileIndex][0] == OPEN_FOLDER_CHAR
-                    || FileNames[CurrentFileIndex][0] == OPEN_PARENT_FOLDER_CHAR)
-                    break;
-                DisplayCurrentFilename();
-                ProcessFileOrTest(chainNumber);
-            }
-            CurrentFileIndex = savedFileIndex;
-        }
+        HandleKeySelect();
         lastMenuItem = -1;  // show the menu again
     }
     if (keypress == KEYRIGHT) {                    // The Right Key was Pressed
-        // redid this as if/else if because switch was crashing
-        if (menuItem == mSelectFile) {
-            if (CurrentFileIndex < NumberOfFiles - 1) {
-                CurrentFileIndex++;
-            }
-            else {
-                CurrentFileIndex = 0;                // On the last file so wrap round to the first file
-            }
-            DisplayCurrentFilename();
-        }
-        else if (menuItem == mChainFiles) {
-            bChainFiles = !bChainFiles;
-        }
-        else if (menuItem == mStripBrightness) {
-            if (nStripBrightness < 100) {
-                ++nStripBrightness;
-            }
-        }
-        else if (menuItem == mInitDelay) {
-            ++initDelay;
-        }
-        else if (menuItem == mFrameHoldTime) {
-            frameHold += 1;
-        }
-        else if (menuItem == mRepeatTimes) {
-            repeatTimes += 1;
-        }
-        else if (menuItem == mRepeatDelay) {
-            repeatDelay += 100;
-        }
-        else if (menuItem == mTest) {
-            ++nTestNumber;
-            if (nTestNumber >= MAXTEST)
-                nTestNumber = 0;
-        }
-        else if (menuItem == mBackLightBrightness) {
-            if (nMaxBackLight < 100)
-                ++nMaxBackLight;
-        }
-        else if (menuItem == mBackLightTimer) {
-            ++nBackLightSeconds;
-        }
-        else if (menuItem == mSavedSettings) {
-            SaveSettings(true, false);
-        }
-        else if (menuItem == mGammaCorrection) {
-            bGammaCorrection = !bGammaCorrection;
-        }
-        else if (menuItem == mStripLength) {
-            strip.updateLength(++stripLength);
-        }
-        else if (menuItem == mScaleHeight) {
-            bScaleHeight = !bScaleHeight;
-        }
-        else if (menuItem == mAutoLoadSettings) {
-            bAutoLoadSettings = !bAutoLoadSettings;
-        }
+        HandleKeyRight();
         // redraw
         lastMenuItem = -1;
     }
 
     if (keypress == KEYLEFT) {                    // The Left Key was Pressed
-        if (menuItem == mSelectFile) {
-            if (CurrentFileIndex > 0) {
-                CurrentFileIndex--;
-            }
-            else {
-                CurrentFileIndex = NumberOfFiles - 1;    // On the last file so wrap round to the first file
-            }
-            DisplayCurrentFilename();
-        }
-        else if (menuItem == mChainFiles) {
-            bChainFiles = !bChainFiles;
-        }
-        else if (menuItem == mStripBrightness) {
-            if (nStripBrightness > 1) {
-                --nStripBrightness;
-            }
-        }
-        else if (menuItem == mInitDelay) {
-            if (initDelay > 0) {
-                --initDelay;
-            }
-        }
-        else if (menuItem == mFrameHoldTime) {
-            if (frameHold > 0) {
-                frameHold -= 1;
-            }
-        }
-        else if (menuItem == mRepeatTimes) {
-            if (repeatTimes > 1) {
-                repeatTimes -= 1;
-            }
-        }
-        else if (menuItem == mRepeatDelay) {
-            if (repeatDelay > 0) {
-                repeatDelay -= 100;
-            }
-        }
-        else if (menuItem == mTest) {
-            --nTestNumber;
-            if (nTestNumber < 0)
-                nTestNumber = MAXTEST - 1;
-        }
-        else if (menuItem == mBackLightBrightness) {
-            if (nMaxBackLight > 5)
-                --nMaxBackLight;
-        }
-        else if (menuItem == mBackLightTimer) {
-            if (nBackLightSeconds > 1)
-                --nBackLightSeconds;
-        }
-        else if (menuItem == mSavedSettings) {
-            // load the settings
-            SaveSettings(false, false);
-        }
-        else if (menuItem == mGammaCorrection) {
-            bGammaCorrection = !bGammaCorrection;
-        }
-        else if (menuItem == mStripLength) {
-            if (stripLength > 1)
-                strip.updateLength(--stripLength);
-        }
-        else if (menuItem == mScaleHeight) {
-            bScaleHeight = !bScaleHeight;
-        }
-        else if (menuItem == mAutoLoadSettings) {
-            bAutoLoadSettings = !bAutoLoadSettings;
-        }
+        HandleKeyLeft();
         // redraw
         lastMenuItem = -1;
     }
 
     if ((keypress == KEYUP)) {                 // The up key was pressed
-        if (menuItem == 1) {
-            menuItem = MAXMENU;
-        }
-        else {
-            menuItem -= 1;
-        }
+        menuItem = menuItem == 1 ? MAXMENU : menuItem - 1;
     }
     if ((keypress == KEYDOWN)) {                 // The down key was pressed
-        if (menuItem == MAXMENU) {
-            menuItem = 1;
-        }
-        else {
-            menuItem += 1;
-        }
+        menuItem = menuItem == MAXMENU ? 1 : menuItem + 1;
     }
     // wait a bit between keypresses
     if (keypress == KEYNONE) {
@@ -509,6 +355,168 @@ void loop() {
     }
 }
 
+void HandleKeySelect()
+{
+    // don't run until key released
+    while (ReadKeypad() != KEYNONE)
+        ;
+    int chainNumber = FileCountOnly() - CurrentFileIndex;
+    bool isFolder = ProcessFileOrTest(bChainFiles ? chainNumber : 0);
+    isFolder |= FileNames[CurrentFileIndex][0] == OPEN_FOLDER_CHAR
+        || FileNames[CurrentFileIndex][0] == OPEN_PARENT_FOLDER_CHAR;
+    // check if file chaining is on
+    if (!isFolder && bChainFiles) {
+        // save our settings and process files to the end of the list
+        int savedFileIndex = CurrentFileIndex;
+        while (CurrentFileIndex < NumberOfFiles - 1) {
+            --chainNumber;
+            ++CurrentFileIndex;
+            // stop on folder
+            if (FileNames[CurrentFileIndex][0] == OPEN_FOLDER_CHAR
+                || FileNames[CurrentFileIndex][0] == OPEN_PARENT_FOLDER_CHAR)
+                break;
+            DisplayCurrentFilename();
+            ProcessFileOrTest(chainNumber);
+        }
+        CurrentFileIndex = savedFileIndex;
+    }
+}
+
+void HandleKeyRight()
+{
+    // redid this as if/else if because switch was crashing
+    if (menuItem == mSelectFile) {
+        if (CurrentFileIndex < NumberOfFiles - 1) {
+            CurrentFileIndex++;
+        }
+        else {
+            CurrentFileIndex = 0;                // On the last file so wrap round to the first file
+        }
+        DisplayCurrentFilename();
+    }
+    else if (menuItem == mChainFiles) {
+        bChainFiles = !bChainFiles;
+    }
+    else if (menuItem == mStripBrightness) {
+        if (nStripBrightness < 100) {
+            if (nStripBrightness == 1)
+                nStripBrightness = 0;
+            nStripBrightness += 5;
+        }
+    }
+    else if (menuItem == mInitDelay) {
+        ++initDelay;
+    }
+    else if (menuItem == mFrameHoldTime) {
+        frameHold += 1;
+    }
+    else if (menuItem == mRepeatCount) {
+        repeatCount += 1;
+    }
+    else if (menuItem == mRepeatDelay) {
+        repeatDelay += 100;
+    }
+    else if (menuItem == mTest) {
+        ++nTestNumber;
+        if (nTestNumber >= MAXTEST)
+            nTestNumber = 0;
+    }
+    else if (menuItem == mBackLightBrightness) {
+        if (nMaxBackLight < 100)
+            ++nMaxBackLight;
+    }
+    else if (menuItem == mBackLightTimer) {
+        ++nBackLightSeconds;
+    }
+    else if (menuItem == mSavedSettings) {
+        SaveSettings(true, false);
+    }
+    else if (menuItem == mGammaCorrection) {
+        bGammaCorrection = !bGammaCorrection;
+    }
+    else if (menuItem == mStripLength) {
+        strip.updateLength(++stripLength);
+    }
+    else if (menuItem == mScaleHeight) {
+        bScaleHeight = !bScaleHeight;
+    }
+    else if (menuItem == mAutoLoadSettings) {
+        bAutoLoadSettings = !bAutoLoadSettings;
+    }
+}
+
+void HandleKeyLeft()
+{
+    if (menuItem == mSelectFile) {
+        if (CurrentFileIndex > 0) {
+            CurrentFileIndex--;
+        }
+        else {
+            CurrentFileIndex = NumberOfFiles - 1;    // On the last file so wrap round to the first file
+        }
+        DisplayCurrentFilename();
+    }
+    else if (menuItem == mChainFiles) {
+        bChainFiles = !bChainFiles;
+    }
+    else if (menuItem == mStripBrightness) {
+        if (nStripBrightness > 1) {
+            nStripBrightness -= 5;
+            if (nStripBrightness <= 0)
+                nStripBrightness = 1;
+        }
+    }
+    else if (menuItem == mInitDelay) {
+        if (initDelay > 0) {
+            --initDelay;
+        }
+    }
+    else if (menuItem == mFrameHoldTime) {
+        if (frameHold > 0) {
+            frameHold -= 1;
+        }
+    }
+    else if (menuItem == mRepeatCount) {
+        if (repeatCount > 1) {
+            repeatCount -= 1;
+        }
+    }
+    else if (menuItem == mRepeatDelay) {
+        if (repeatDelay > 0) {
+            repeatDelay -= 100;
+        }
+    }
+    else if (menuItem == mTest) {
+        --nTestNumber;
+        if (nTestNumber < 0)
+            nTestNumber = MAXTEST - 1;
+    }
+    else if (menuItem == mBackLightBrightness) {
+        if (nMaxBackLight > 5)
+            --nMaxBackLight;
+    }
+    else if (menuItem == mBackLightTimer) {
+        if (nBackLightSeconds > 1)
+            --nBackLightSeconds;
+    }
+    else if (menuItem == mSavedSettings) {
+        // load the settings
+        SaveSettings(false, false);
+    }
+    else if (menuItem == mGammaCorrection) {
+        bGammaCorrection = !bGammaCorrection;
+    }
+    else if (menuItem == mStripLength) {
+        if (stripLength > 1)
+            strip.updateLength(--stripLength);
+    }
+    else if (menuItem == mScaleHeight) {
+        bScaleHeight = !bScaleHeight;
+    }
+    else if (menuItem == mAutoLoadSettings) {
+        bAutoLoadSettings = !bAutoLoadSettings;
+    }
+}
 // count the actual files
 int FileCountOnly()
 {
@@ -537,7 +545,7 @@ bool ProcessFileOrTest(int chainnumber)
             delay(1000);
         }
     }
-    for (int x = repeatTimes; x > 0; x--) {
+    for (int x = repeatCount; x > 0; x--) {
         lcd.clear();
         lcd.setCursor(0, 1);
         if (menuItem == mTest) {
@@ -629,7 +637,7 @@ void SaveSettings(bool save, bool autoload)
         {&frameHold, sizeof frameHold},
         {&initDelay, sizeof initDelay},
         {&repeat, sizeof repeat},
-        {&repeatTimes, sizeof repeatTimes},
+        {&repeatCount, sizeof repeatCount},
         {&repeatDelay, sizeof repeatDelay},
         {&bGammaCorrection, sizeof bGammaCorrection},
         {&stripLength, sizeof stripLength},
@@ -699,7 +707,7 @@ void setupLEDs() {
 
 void setupLCDdisplay() {
     lcd.begin(16, 2);
-    lcd.print("LightWand V4.1");
+    lcd.print("LightWand V4.2");
     lcd.setCursor(0, 1);
     lcd.print("Initializing...");
     delay(2000);
@@ -1192,11 +1200,17 @@ void ReadAndDisplayFile() {
     // incorrect colors.  Some strips use an x,r,b,g sequence and some use x,r,g,b
     // Change the order if needed to make the colors correct.
 
+    long secondsLeft = 0, lastSeconds = 0;
+    char num[8];
     for (int y = imgHeight; y > 0; y--) {
-        lcd.setCursor(12, 0);
-        char num[6];
-        sprintf(num, "%4d", y);
-        lcd.print(num);
+        lcd.setCursor(11, 0);
+        // approximate time left
+        secondsLeft = (((y * 10L) / 384L) + 1L) + (y * (long)frameHold / 1000L);
+        if (secondsLeft != lastSeconds) {
+            lastSeconds = secondsLeft;
+            sprintf(num, "%3d S", secondsLeft);
+            lcd.print(num);
+        }
         int bufpos = 0;
         uint32_t offset = (MYBMP_BF_OFF_BITS + ((y - 1) * lineLength));
         dataFile.seek(offset);
