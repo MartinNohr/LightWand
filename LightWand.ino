@@ -546,7 +546,7 @@ bool ProcessFileOrTest(int chainnumber)
             delay(1000);
         }
     }
-    for (int x = repeatCount; x > 0; x--) {
+    for (int counter = repeatCount; counter > 0; counter--) {
         lcd.clear();
         lcd.setCursor(0, 1);
         if (menuItem == mTest) {
@@ -565,7 +565,7 @@ bool ProcessFileOrTest(int chainnumber)
         // only display if a file
         char first = CurrentFilename[0];
         if (first != OPEN_FOLDER_CHAR && first != OPEN_PARENT_FOLDER_CHAR) {
-            sprintf(line, "Repeat %d", x);
+            sprintf(line, "Repeat %d", counter);
             lcd.print(line);
         }
         if (menuItem == mTest) {
@@ -606,19 +606,23 @@ bool ProcessFileOrTest(int chainnumber)
             // output the file
             SendFile(CurrentFilename);
         }
-        strip.clear();
-        strip.show();
         if (bCancelRun) {
             bCancelRun = false;
             break;
         }
-        if (x > 1) {
+        if (counter > 1) {
             lcd.clear();
             lcd.setCursor(0, 0);
             lcd.print("Repeat delay...");
-            delay(repeatDelay);
+            if (repeatDelay) {
+                strip.clear();
+                strip.show();
+                delay(repeatDelay);
+            }
         }
     }
+    strip.clear();
+    strip.show();
 }
 
 
@@ -1069,17 +1073,25 @@ void OppositeRunningDots()
     }
 }
 
+#define BARBERSIZE 10
+#define BARBERCOUNT 40
 void BarberPole()
 {
-    uint32_t red, white, blue, color;
-    red = strip.Color(127, 0, 0);
-    white = strip.Color(127, 127, 127);
-    blue = strip.Color(0, 0, 127);
-
-    for (int loop = 0; loop < 40; ++loop) {
+    uint32_t color, red, white, blue;
+    byte r, g, b;
+    r = 255, g = 0, b = 0;
+    fixRGBwithGamma(&r, &g, &b);
+    red = strip.Color(r, g, b);
+    r = 255, g = 255, b = 255;
+    fixRGBwithGamma(&r, &g, &b);
+    white = strip.Color(r, g, b);
+    r = 0, g = 0, b = 255;
+    fixRGBwithGamma(&r, &g, &b);
+    blue = strip.Color(r, g, b);
+    for (int loop = 0; loop < 4 * BARBERCOUNT; ++loop) {
         for (int ledIx = 0; ledIx < stripLength; ++ledIx) {
             // figure out what color
-            switch (((ledIx + loop) % 40) / 10) {
+            switch (((ledIx + loop) % BARBERCOUNT) / BARBERSIZE) {
             case 0: // red
                 color = red;
                 break;
