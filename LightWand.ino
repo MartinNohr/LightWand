@@ -822,8 +822,10 @@ void DisplayCurrentFilename() {
 }
 
 
-
+// read the files from the card
+// look for start.lwc, and process it, but don't add it to the list
 void GetFileNamesFromSD(File dir) {
+    String startfile;
     NumberOfFiles = 0;
     CurrentFileIndex = 0;
     String CurrentFilename = "";
@@ -850,17 +852,46 @@ void GetFileNamesFromSD(File dir) {
             else {
                 CurrentFilename = entry.name();
                 CurrentFilename.toUpperCase();
-                if (CurrentFilename.endsWith(".bmp") || CurrentFilename.endsWith(".BMP")) { //find files with our extension only
+                if (CurrentFilename.endsWith(".BMP")) { //find files with our extension only
                     FileNames[NumberOfFiles] = entry.name();
                     NumberOfFiles++;
+                }
+                else if (CurrentFilename == "START.LWC") {
+                    startfile = CurrentFilename;
                 }
             }
         }
         entry.close();
     }
     isort(FileNames, NumberOfFiles);
+    // see if we need to process the auto start file
+    if (startfile.length())
+        ProcessConfigFile(startfile);
 }
 
+// process the lines in the config file
+void ProcessConfigFile(String filename)
+{
+    SDLib::File file;
+    String filepath = GetFilePath() + filename;
+    file = SD.open(filepath);
+    if (file) {
+        // read the lines and do what they say
+        String line, command, args;
+        line = file.readString();
+        int ix = line.indexOf('=', 0);
+        if (ix > 0) {
+            command = line.substring(0, ix);
+            command.trim();
+            command.toUpperCase();
+            if (command == "PIXELS") {
+                // read the pixel count
+                args = line.substring(ix + 1);
+                stripLength = args.toInt();
+            }
+        }
+    }
+}
 
 
 void latchanddelay(int dur) {
