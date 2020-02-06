@@ -55,10 +55,9 @@ int stripLength = 144;                    // Set the number of LEDs the LED Stri
 int frameHold = 25;                       // default for the frame delay 
 int lastMenuItem = -1;                    // check to see if we need to redraw menu
 int menuItem = 1;                         // Variable for current main menu selection
-int initDelay = 0;                        // Variable for delay between button press and start of light sequence, in seconds
+int startDelay = 0;                        // Variable for delay between button press and start of light sequence, in seconds
 int repeat = 0;                           // Variable to select auto repeat (until select button is pressed again)
 int repeatDelay = 0;                      // Variable for delay between repeats
-int updateMode = 0;                       // Variable to keep track of update Modes
 int repeatCount = 1;                      // Variable to keep track of number of repeats
 int nStripBrightness = 50;                // Variable and default for the Brightness of the strip
 bool bGammaCorrection = true;             // set to use the gamma table
@@ -285,7 +284,7 @@ void loop() {
             lcd.print("%");
             break;
         case mInitDelay:
-            lcd.print(String(initDelay) + " Seconds");
+            lcd.print(String(startDelay) + " Seconds");
             break;
         case mFrameHoldTime:
             lcd.print(String(frameHold) + " mSec");
@@ -433,7 +432,7 @@ void HandleKeyRight()
         }
     }
     else if (menuItem == mInitDelay) {
-        ++initDelay;
+        ++startDelay;
     }
     else if (menuItem == mFrameHoldTime) {
         frameHold += 1;
@@ -495,8 +494,8 @@ void HandleKeyLeft()
         }
     }
     else if (menuItem == mInitDelay) {
-        if (initDelay > 0) {
-            --initDelay;
+        if (startDelay > 0) {
+            --startDelay;
         }
     }
     else if (menuItem == mFrameHoldTime) {
@@ -565,8 +564,8 @@ bool ProcessFileOrTest(int chainnumber)
     char line[17];
     lcd.clear();
     lcd.setCursor(0, 0);
-    if (initDelay) {
-        for (int seconds = initDelay; seconds; --seconds) {
+    if (startDelay) {
+        for (int seconds = startDelay; seconds; --seconds) {
             lcd.setCursor(0, 0);
             sprintf(line, "Wait: %d", seconds);
             lcd.print(line);
@@ -667,7 +666,7 @@ void SaveSettings(bool save, bool autoload)
         {&bAutoLoadSettings, sizeof bAutoLoadSettings},
         {&nStripBrightness, sizeof nStripBrightness},
         {&frameHold, sizeof frameHold},
-        {&initDelay, sizeof initDelay},
+        {&startDelay, sizeof startDelay},
         {&repeat, sizeof repeat},
         {&repeatCount, sizeof repeatCount},
         {&repeatDelay, sizeof repeatDelay},
@@ -921,6 +920,18 @@ void ProcessConfigFile(String filename)
                     nStripBrightness = 1;
                 else if (nStripBrightness > 100)
                     nStripBrightness = 100;
+            }
+            else if (command == "REPEAT COUNT") {
+                repeatCount = args.toInt();
+            }
+            else if (command == "REPEAT DELAY") {
+                repeatDelay = args.toInt();
+            }
+            else if (command == "FRAME TIME") {
+                frameHold = args.toInt();
+            }
+            else if (command == "START DELAY") {
+                startDelay = args.toInt();
             }
         }
     }
