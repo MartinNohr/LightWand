@@ -100,9 +100,32 @@ int kbdPause = 0;
 unsigned long startKeyDown = 0;
 
 // built-in test patterns
-enum e_tests { mtDots = 0, mtTwoDots, mtRandomBars, mtCheckerBoard, mtRandomRunningDot, mtBarberPole, MAXTEST };
+enum e_tests {
+    mtDots = 0,
+    mtTwoDots,
+    mtRandomBars,
+    mtCheckerBoard,
+    mtRandomRunningDot,
+    mtBarberPole,
+    mtTestCylon,
+    mtTwinkle,
+    mtBouncingBalls,
+    mtMeteor,
+    MAXTEST 
+};
 // test functions, in same order as enums above
-void (*testFunctions[MAXTEST])() = { RunningDot, OppositeRunningDots, RandomBars, CheckerBoard, RandomRunningDot, BarberPole };
+void (*testFunctions[MAXTEST])() = {
+    RunningDot,
+    OppositeRunningDots,
+    RandomBars,
+    CheckerBoard,
+    RandomRunningDot,
+    BarberPole,
+    TestCylon,
+    TestTwinkle,
+    TestBouncingBalls,
+    TestMeteor
+};
 const char* testStrings[MAXTEST] = {
     "Running Dot",
     "Opposite Dots",
@@ -110,6 +133,10 @@ const char* testStrings[MAXTEST] = {
     "Checker Board",
     "Random Run Dot",
     "Barber Pole",
+    "Cylon Eye",
+    "Twinkle",
+    "Bouncing Balls",
+    "Meteor"
 };
 // which one to use
 int nTestNumber = 0;
@@ -884,10 +911,12 @@ void ProcessConfigFile(String filename)
             command = line.substring(0, ix);
             command.trim();
             command.toUpperCase();
+            args = line.substring(ix + 1);
             if (command == "PIXELS") {
-                // read the pixel count
-                args = line.substring(ix + 1);
                 stripLength = args.toInt();
+            }
+            else if (command == "BRIGHTNESS") {
+                nStripBrightness = args.toInt();
             }
         }
     }
@@ -1363,4 +1392,172 @@ PROGMEM const unsigned char gammaTable[] = {
 
 inline byte gamma(byte x) {
     return bGammaCorrection ? pgm_read_byte(&gammaTable[x]) : (x & 0x7f);
+}
+
+void TestCylon()
+{
+    CylonBounce(255 * nStripBrightness / 100, 0, 0, 4, 10, 50);
+}
+void CylonBounce(byte red, byte green, byte blue, int EyeSize, int SpeedDelay, int ReturnDelay)
+{
+    for (int i = 0; i < stripLength - EyeSize - 2; i++) {
+        strip.clear();
+        strip.setPixelColor(i, red / 10, green / 10, blue / 10);
+        for (int j = 1; j <= EyeSize; j++) {
+            strip.setPixelColor(i + j, red, green, blue);
+        }
+        strip.setPixelColor(i + EyeSize + 1, red / 10, green / 10, blue / 10);
+        strip.show();
+        delay(SpeedDelay);
+    }
+
+    delay(ReturnDelay);
+
+    for (int i = stripLength - EyeSize - 2; i > 0; i--) {
+        strip.clear();
+        strip.setPixelColor(i, red / 10, green / 10, blue / 10);
+        for (int j = 1; j <= EyeSize; j++) {
+            strip.setPixelColor(i + j, red, green, blue);
+        }
+        strip.setPixelColor(i + EyeSize + 1, red / 10, green / 10, blue / 10);
+        strip.show();
+        delay(SpeedDelay);
+    }
+
+    delay(ReturnDelay);
+}
+
+void TestTwinkle() {
+    TwinkleRandom(20, 100, false);
+}
+
+void TwinkleRandom(int Count, int SpeedDelay, boolean OnlyOne) {
+    strip.clear();
+    byte brightness = (255 * nStripBrightness) / 100;
+
+    for (int i = 0; i < Count; i++) {
+        strip.setPixelColor(random(stripLength), random(0, brightness), random(0, brightness), random(0, brightness));
+        strip.show();
+        delay(SpeedDelay);
+        if (OnlyOne) {
+            strip.clear();
+        }
+    }
+
+    delay(SpeedDelay);
+}
+
+#define BallCount 4
+void TestBouncingBalls() {
+    byte bright = 255 * nStripBrightness / 100;
+    byte colors[BallCount][3] = {
+        {bright, 0, 0},
+        {bright, bright, bright},
+        {0, 0, bright},
+        {0, bright, 0}
+    };
+
+    BouncingColoredBalls(colors);
+}
+void BouncingColoredBalls(byte colors[][3]) {
+    float Gravity = -9.81;
+    int StartHeight = 1;
+
+    float Height[BallCount];
+    float ImpactVelocityStart = sqrt(-2 * Gravity * StartHeight);
+    float ImpactVelocity[BallCount];
+    float TimeSinceLastBounce[BallCount];
+    int   Position[BallCount];
+    long  ClockTimeSinceLastBounce[BallCount];
+    float Dampening[BallCount];
+
+    for (int i = 0; i < BallCount; i++) {
+        ClockTimeSinceLastBounce[i] = millis();
+        Height[i] = StartHeight;
+        Position[i] = 0;
+        ImpactVelocity[i] = ImpactVelocityStart;
+        TimeSinceLastBounce[i] = 0;
+        Dampening[i] = 0.90 - float(i) / pow(BallCount, 2);
+    }
+
+    // run for 30 seconds
+    long start = millis();
+    while (millis() < start + 10000) {
+        for (int i = 0; i < BallCount; i++) {
+            TimeSinceLastBounce[i] = millis() - ClockTimeSinceLastBounce[i];
+            Height[i] = 0.5 * Gravity * pow(TimeSinceLastBounce[i] / 1000, 2.0) + ImpactVelocity[i] * TimeSinceLastBounce[i] / 1000;
+
+            if (Height[i] < 0) {
+                Height[i] = 0;
+                ImpactVelocity[i] = Dampening[i] * ImpactVelocity[i];
+                ClockTimeSinceLastBounce[i] = millis();
+
+                if (ImpactVelocity[i] < 0.01) {
+                    ImpactVelocity[i] = ImpactVelocityStart;
+                }
+            }
+            Position[i] = round(Height[i] * (stripLength - 1) / StartHeight);
+        }
+
+        for (int i = 0; i < BallCount; i++) {
+            strip.setPixelColor(Position[i], colors[i][0], colors[i][1], colors[i][2]);
+        }
+
+        strip.show();
+        strip.clear();
+    }
+}
+
+void TestMeteor() {
+    byte brightness = (255 * nStripBrightness) / 100;
+    meteorRain(brightness, brightness, brightness, 10, 64, true, 30);
+}
+
+void meteorRain(byte red, byte green, byte blue, byte meteorSize, byte meteorTrailDecay, boolean meteorRandomDecay, int SpeedDelay) {
+    strip.clear();
+
+    for (int i = 0; i < stripLength + stripLength; i++) {
+
+
+        // fade brightness all LEDs one step
+        for (int j = 0; j < stripLength; j++) {
+            if ((!meteorRandomDecay) || (random(10) > 5)) {
+                fadeToBlack(j, meteorTrailDecay);
+            }
+        }
+
+        // draw meteor
+        for (int j = 0; j < meteorSize; j++) {
+            if ((i - j < stripLength) && (i - j >= 0)) {
+                strip.setPixelColor(i - j, red, green, blue);
+            }
+        }
+
+        strip.show();
+        delay(SpeedDelay);
+    }
+}
+
+void fadeToBlack(int ledNo, byte fadeValue) {
+#ifdef ADAFRUIT_NEOPIXEL_H
+    // NeoPixel
+    uint32_t oldColor;
+    uint8_t r, g, b;
+    int value;
+
+    oldColor = strip.getPixelColor(ledNo);
+    r = (oldColor & 0x00ff0000UL) >> 16;
+    g = (oldColor & 0x0000ff00UL) >> 8;
+    b = (oldColor & 0x000000ffUL);
+
+    r = (r <= 10) ? 0 : (int)r - (r * fadeValue / 256);
+    g = (g <= 10) ? 0 : (int)g - (g * fadeValue / 256);
+    b = (b <= 10) ? 0 : (int)b - (b * fadeValue / 256);
+
+    strip.setPixelColor(ledNo, r, g, b);
+#endif
+#ifndef ADAFRUIT_NEOPIXEL_H
+    // FastLED
+    leds[ledNo].fadeToBlackBy(fadeValue);
+#endif  
 }
