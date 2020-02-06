@@ -917,6 +917,10 @@ void ProcessConfigFile(String filename)
             }
             else if (command == "BRIGHTNESS") {
                 nStripBrightness = args.toInt();
+                if (nStripBrightness < 1)
+                    nStripBrightness = 1;
+                else if (nStripBrightness > 100)
+                    nStripBrightness = 100;
             }
         }
     }
