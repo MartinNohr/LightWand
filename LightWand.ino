@@ -241,7 +241,7 @@ void setup() {
 }
 
 // create a character by filling blocks to indicate how far down the menu we are
-void createZeroCharacter()
+void CreateMenuCharacter()
 {
     memset(chZeroPattern, 0, sizeof chZeroPattern);
     for (int menu = 0; menu < menuItem; ++menu) {
@@ -255,7 +255,7 @@ void createZeroCharacter()
 void loop() {
     backLightTimer.tick();
     if (bBackLightOn && menuItem != lastMenuItem) {
-        createZeroCharacter();
+        CreateMenuCharacter();
         lcd.clear();
         lcd.setCursor(0, 0);
         lcd.write((byte)0);
@@ -337,7 +337,7 @@ void loop() {
         }
     }
     // run the file selected except when test menu is up, then run the test
-    if ((keypress == KEYSELECT) || (digitalRead(AuxButton) == LOW)) {    // The select key was pressed
+    if (keypress == KEYSELECT) {    // The select key or the button was pressed
         HandleKeySelect();
         lastMenuItem = -1;  // show the menu again
     }
@@ -545,6 +545,7 @@ void HandleKeyLeft()
         bAutoLoadSettings = !bAutoLoadSettings;
     }
 }
+
 // count the actual files
 int FileCountOnly()
 {
@@ -736,7 +737,6 @@ void setupLEDs() {
 }
 
 
-
 void setupLCDdisplay() {
     lcd.begin(16, 2);
     lcd.print("LightWand V4.2");
@@ -745,8 +745,6 @@ void setupLCDdisplay() {
     delay(2000);
     lcd.clear();
 }
-
-
 
 void setupSDcard() {
     pinMode(SDcsPin, OUTPUT);
@@ -771,7 +769,7 @@ void setupSDcard() {
 }
 
 
-
+// read the keys
 int ReadKeypad() {
     adc_key_in = analogRead(0);             // read the value from the sensor  
     key = get_key(adc_key_in);              // convert into key press
@@ -795,6 +793,9 @@ int ReadKeypad() {
 
 // Convert ADC value to key number
 int get_key(unsigned int input) {
+    if (digitalRead(AuxButton) == LOW) {
+        return KEYSELECT;
+    }
     int k;
     for (k = 0; k < NUM_KEYS; k++) {
         if (input < adc_key_val[k]) {
