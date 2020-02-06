@@ -39,6 +39,7 @@
 #include <SPI.h>                         // Library for the SPI Interface
 #include <avr/eeprom.h>
 #include <timer.h>
+#include "LightWand.h"
 
 // Pin assignments for the Arduino (Make changes to these if you use different Pins)
 #define BACKLIGHT 10                      // Pin used for the LCD Backlight
@@ -951,239 +952,6 @@ void ClearStrip() {
     strip.show();
 }
 
-// test builtin patterns
-
-// checkerboard
-void CheckerBoard()
-{
-    byte r, g, b;
-    int size = sqrt(stripLength);
-    for (int x = 0; x < size * 2; ++x) {
-        // one row with BW, and the next WB
-        // write pixels alternating white and black
-        for (int y = 0; y < stripLength; ++y) {
-            r = g = b = ((((y / size) % 2) ^ (x % 2)) & 1) ? 0 : 255;
-            fixRGBwithGamma(&r, &g, &b);
-            strip.setPixelColor(y, r, g, b);
-        }
-        strip.show();
-        delay(frameHold);
-    }
-}
-
-// show random bars of lights, 20 times
-void RandomBars()
-{
-    byte r, g, b;
-    srand(millis());
-    char line[] = "                ";
-//    lcd.setCursor(0, 1);
-//    lcd.write(line, 16);
-    for (int pass = 0; pass < 50; ++pass) {
-        sprintf(line, "%2d/50", pass + 1);
-        lcd.setCursor(10, 0);
-        lcd.print(line);
-        if (pass % 2) {
-            // odd numbers, clear
-            strip.clear();
-        }
-        else {
-            // even numbers, show bar
-            r = random(0, 255);
-            g = random(0, 255);
-            b = random(0, 255);
-            fixRGBwithGamma(&r, &g, &b);
-            // fill the strip color
-            strip.fill(strip.Color(r, g, b), 0, stripLength);
-            //for (int ix = 0; ix < stripLength; ++ix) {
-            //    strip.setPixelColor(ix, r, g, b);
-            //}
-        }
-        strip.show();
-        delay(frameHold);
-    }
-}
-
-// running bits
-void RunningDot()
-{
-    for (int mode = 0; mode <= 3; ++mode) {
-        // RGBW
-        byte r, g, b;
-        switch (mode) {
-        case 0: // red
-            r = 255;
-            g = 0;
-            b = 0;
-            break;
-        case 1: // green
-            r = 0;
-            g = 255;
-            b = 0;
-            break;
-        case 2: // blue
-            r = 0;
-            g = 0;
-            b = 255;
-            break;
-        case 3: // white
-            r = 255;
-            g = 255;
-            b = 255;
-            break;
-        }
-        fixRGBwithGamma(&r, &g, &b);
-        char line[10];
-        for (int ix = 0; ix < stripLength; ++ix) {
-            lcd.setCursor(11, 0);
-            sprintf(line, "%3d", ix);
-            lcd.print(line);
-            if (ix > 0) {
-                strip.setPixelColor(ix - 1, 0);
-            }
-            strip.setPixelColor(ix, r, g, b);
-            strip.show();
-            delay(frameHold);
-        }
-        // remember the last one, turn it off
-        strip.setPixelColor(stripLength - 1, 0);
-        strip.show();
-    }
-}
-
-// running dot with random times
-void RandomRunningDot()
-{
-    randomSeed(millis());
-    for (int mode = 0; mode <= 3; ++mode) {
-        // RGBW
-        byte r, g, b;
-        switch (mode) {
-        case 0: // red
-            r = 255;
-            g = 0;
-            b = 0;
-            break;
-        case 1: // green
-            r = 0;
-            g = 255;
-            b = 0;
-            break;
-        case 2: // blue
-            r = 0;
-            g = 0;
-            b = 255;
-            break;
-        case 3: // white
-            r = 255;
-            g = 255;
-            b = 255;
-            break;
-        }
-        fixRGBwithGamma(&r, &g, &b);
-        char line[10];
-        for (int ix = 0; ix < stripLength; ++ix) {
-            lcd.setCursor(11, 0);
-            sprintf(line, "%3d", ix);
-            lcd.print(line);
-            if (ix > 0) {
-                strip.setPixelColor(ix - 1, 0);
-            }
-            int step = random(1, 10);
-            if (step < 3) {
-                ix -= step;
-            }
-            strip.setPixelColor(ix, r, g, b);
-            strip.show();
-            // randomize the hold time
-            delay(random(0, frameHold * 2));
-        }
-        // remember the last one, turn it off
-        strip.setPixelColor(stripLength - 1, 0);
-        strip.show();
-    }
-}
-
-void OppositeRunningDots()
-{
-    for (int mode = 0; mode <= 3; ++mode) {
-        // RGBW
-        byte r, g, b;
-        switch (mode) {
-        case 0: // red
-            r = 255;
-            g = 0;
-            b = 0;
-            break;
-        case 1: // green
-            r = 0;
-            g = 255;
-            b = 0;
-            break;
-        case 2: // blue
-            r = 0;
-            g = 0;
-            b = 255;
-            break;
-        case 3: // white
-            r = 255;
-            g = 255;
-            b = 255;
-            break;
-        }
-        fixRGBwithGamma(&r, &g, &b);
-        for (int ix = 0; ix < stripLength; ++ix) {
-            if (ix > 0) {
-                strip.setPixelColor(ix - 1, 0);
-                strip.setPixelColor(stripLength - ix + 1, 0);
-            }
-            strip.setPixelColor(stripLength - ix, r, g, b);
-            strip.setPixelColor(ix, r, g, b);
-            strip.show();
-            delay(frameHold);
-        }
-        // remember the last one, turn it off
-        strip.setPixelColor(stripLength - 1, 0);
-        strip.show();
-    }
-}
-
-#define BARBERSIZE 10
-#define BARBERCOUNT 40
-void BarberPole()
-{
-    uint32_t color, red, white, blue;
-    byte r, g, b;
-    r = 255, g = 0, b = 0;
-    fixRGBwithGamma(&r, &g, &b);
-    red = strip.Color(r, g, b);
-    r = 255, g = 255, b = 255;
-    fixRGBwithGamma(&r, &g, &b);
-    white = strip.Color(r, g, b);
-    r = 0, g = 0, b = 255;
-    fixRGBwithGamma(&r, &g, &b);
-    blue = strip.Color(r, g, b);
-    for (int loop = 0; loop < 4 * BARBERCOUNT; ++loop) {
-        for (int ledIx = 0; ledIx < stripLength; ++ledIx) {
-            // figure out what color
-            switch (((ledIx + loop) % BARBERCOUNT) / BARBERSIZE) {
-            case 0: // red
-                color = red;
-                break;
-            case 1: // white
-            case 3:
-                color = white;
-                break;
-            case 2: // blue
-                color = blue;
-                break;
-            }
-            strip.setPixelColor(ledIx, color);
-        }
-        latchanddelay(frameHold);
-    }
-}
-
 
 uint32_t readLong() {
     uint32_t retValue;
@@ -1342,31 +1110,41 @@ void ReadAndDisplayFile() {
         }
         latchanddelay(frameHold);
         // check keys
-        int key = ReadKeypad();
-        if (key == KEYSELECT) {
-            lcd.setCursor(0, 0);
-            lcd.print("Select to cancel");
-            while (ReadKeypad() != KEYNONE)
-                ;
-            while (true) {
-                key = ReadKeypad();
-                if (key == KEYSELECT) {
-                    // cancel here
-                    while (ReadKeypad() != KEYNONE)
-                        ;
-                    bCancelRun = true;
-                    return;
-                }
-                else if (key == KEYNONE)
-                    continue;
-                else {
-                    lcd.setCursor(0, 0);
-                    lcd.print("                ");
-                    break;
-                }
+        if (CheckCancel())
+            return;
+    }
+}
+
+// see if they want to cancel
+bool CheckCancel()
+{
+    bool retflag = false;
+    int key = ReadKeypad();
+    if (key == KEYSELECT) {
+        lcd.setCursor(0, 0);
+        lcd.print("Select to cancel");
+        while (ReadKeypad() != KEYNONE)
+            ;
+        while (true) {
+            key = ReadKeypad();
+            if (key == KEYSELECT) {
+                // cancel here
+                while (ReadKeypad() != KEYNONE)
+                    ;
+                bCancelRun = true;
+                retflag = true;
+                break;
+            }
+            else if (key == KEYNONE)
+                continue;
+            else {
+                lcd.setCursor(0, 0);
+                lcd.print("                ");
+                break;
             }
         }
     }
+    return retflag;
 }
 
 
@@ -1409,6 +1187,261 @@ inline byte gamma(byte x) {
     return bGammaCorrection ? pgm_read_byte(&gammaTable[x]) : (x & 0x7f);
 }
 
+// test builtin patterns
+
+// checkerboard
+void CheckerBoard()
+{
+    byte r, g, b;
+    int size = sqrt(stripLength);
+    for (int x = 0; x < size * 2; ++x) {
+        if (CheckCancel())
+            return;
+        // one row with BW, and the next WB
+        // write pixels alternating white and black
+        for (int y = 0; y < stripLength; ++y) {
+            if (CheckCancel())
+                return;
+            r = g = b = ((((y / size) % 2) ^ (x % 2)) & 1) ? 0 : 255;
+            fixRGBwithGamma(&r, &g, &b);
+            strip.setPixelColor(y, r, g, b);
+        }
+        strip.show();
+        delay(frameHold);
+    }
+}
+
+// show random bars of lights, 20 times
+void RandomBars()
+{
+    byte r, g, b;
+    srand(millis());
+    char line[] = "                ";
+    //    lcd.setCursor(0, 1);
+    //    lcd.write(line, 16);
+    for (int pass = 0; pass < 50; ++pass) {
+        if (CheckCancel())
+            return;
+        sprintf(line, "%2d/50", pass + 1);
+        lcd.setCursor(10, 0);
+        lcd.print(line);
+        if (pass % 2) {
+            // odd numbers, clear
+            strip.clear();
+        }
+        else {
+            // even numbers, show bar
+            r = random(0, 255);
+            g = random(0, 255);
+            b = random(0, 255);
+            fixRGBwithGamma(&r, &g, &b);
+            // fill the strip color
+            strip.fill(strip.Color(r, g, b), 0, stripLength);
+            //for (int ix = 0; ix < stripLength; ++ix) {
+            //    strip.setPixelColor(ix, r, g, b);
+            //}
+        }
+        strip.show();
+        delay(frameHold);
+    }
+}
+
+// running bits
+void RunningDot()
+{
+    for (int mode = 0; mode <= 3; ++mode) {
+        if (CheckCancel())
+            return;
+        // RGBW
+        byte r, g, b;
+        switch (mode) {
+        case 0: // red
+            r = 255;
+            g = 0;
+            b = 0;
+            break;
+        case 1: // green
+            r = 0;
+            g = 255;
+            b = 0;
+            break;
+        case 2: // blue
+            r = 0;
+            g = 0;
+            b = 255;
+            break;
+        case 3: // white
+            r = 255;
+            g = 255;
+            b = 255;
+            break;
+        }
+        fixRGBwithGamma(&r, &g, &b);
+        char line[10];
+        for (int ix = 0; ix < stripLength; ++ix) {
+            if (CheckCancel())
+                return;
+            lcd.setCursor(11, 0);
+            sprintf(line, "%3d", ix);
+            lcd.print(line);
+            if (ix > 0) {
+                strip.setPixelColor(ix - 1, 0);
+            }
+            strip.setPixelColor(ix, r, g, b);
+            strip.show();
+            delay(frameHold);
+        }
+        // remember the last one, turn it off
+        strip.setPixelColor(stripLength - 1, 0);
+        strip.show();
+    }
+}
+
+// running dot with random times
+void RandomRunningDot()
+{
+    randomSeed(millis());
+    for (int mode = 0; mode <= 3; ++mode) {
+        if (CheckCancel())
+            return;
+        // RGBW
+        byte r, g, b;
+        switch (mode) {
+        case 0: // red
+            r = 255;
+            g = 0;
+            b = 0;
+            break;
+        case 1: // green
+            r = 0;
+            g = 255;
+            b = 0;
+            break;
+        case 2: // blue
+            r = 0;
+            g = 0;
+            b = 255;
+            break;
+        case 3: // white
+            r = 255;
+            g = 255;
+            b = 255;
+            break;
+        }
+        fixRGBwithGamma(&r, &g, &b);
+        char line[10];
+        for (int ix = 0; ix < stripLength; ++ix) {
+            if (CheckCancel())
+                return;
+            lcd.setCursor(11, 0);
+            sprintf(line, "%3d", ix);
+            lcd.print(line);
+            if (ix > 0) {
+                strip.setPixelColor(ix - 1, 0);
+            }
+            int step = random(1, 10);
+            if (step < 3) {
+                ix -= step;
+            }
+            strip.setPixelColor(ix, r, g, b);
+            strip.show();
+            // randomize the hold time
+            delay(random(0, frameHold * 2));
+        }
+        // remember the last one, turn it off
+        strip.setPixelColor(stripLength - 1, 0);
+        strip.show();
+    }
+}
+
+void OppositeRunningDots()
+{
+    for (int mode = 0; mode <= 3; ++mode) {
+        if (CheckCancel())
+            return;
+        // RGBW
+        byte r, g, b;
+        switch (mode) {
+        case 0: // red
+            r = 255;
+            g = 0;
+            b = 0;
+            break;
+        case 1: // green
+            r = 0;
+            g = 255;
+            b = 0;
+            break;
+        case 2: // blue
+            r = 0;
+            g = 0;
+            b = 255;
+            break;
+        case 3: // white
+            r = 255;
+            g = 255;
+            b = 255;
+            break;
+        }
+        fixRGBwithGamma(&r, &g, &b);
+        for (int ix = 0; ix < stripLength; ++ix) {
+            if (CheckCancel())
+                return;
+            if (ix > 0) {
+                strip.setPixelColor(ix - 1, 0);
+                strip.setPixelColor(stripLength - ix + 1, 0);
+            }
+            strip.setPixelColor(stripLength - ix, r, g, b);
+            strip.setPixelColor(ix, r, g, b);
+            strip.show();
+            delay(frameHold);
+        }
+        // remember the last one, turn it off
+        strip.setPixelColor(stripLength - 1, 0);
+        strip.show();
+    }
+}
+
+#define BARBERSIZE 10
+#define BARBERCOUNT 40
+void BarberPole()
+{
+    uint32_t color, red, white, blue;
+    byte r, g, b;
+    r = 255, g = 0, b = 0;
+    fixRGBwithGamma(&r, &g, &b);
+    red = strip.Color(r, g, b);
+    r = 255, g = 255, b = 255;
+    fixRGBwithGamma(&r, &g, &b);
+    white = strip.Color(r, g, b);
+    r = 0, g = 0, b = 255;
+    fixRGBwithGamma(&r, &g, &b);
+    blue = strip.Color(r, g, b);
+    for (int loop = 0; loop < 4 * BARBERCOUNT; ++loop) {
+        if (CheckCancel())
+            return;
+        for (int ledIx = 0; ledIx < stripLength; ++ledIx) {
+            if (CheckCancel())
+                return;
+            // figure out what color
+            switch (((ledIx + loop) % BARBERCOUNT) / BARBERSIZE) {
+            case 0: // red
+                color = red;
+                break;
+            case 1: // white
+            case 3:
+                color = white;
+                break;
+            case 2: // blue
+                color = blue;
+                break;
+            }
+            strip.setPixelColor(ledIx, color);
+        }
+        latchanddelay(frameHold);
+    }
+}
+
 void TestCylon()
 {
     CylonBounce(255 * nStripBrightness / 100, 0, 0, 4, 10, 50);
@@ -1416,6 +1449,8 @@ void TestCylon()
 void CylonBounce(byte red, byte green, byte blue, int EyeSize, int SpeedDelay, int ReturnDelay)
 {
     for (int i = 0; i < stripLength - EyeSize - 2; i++) {
+        if (CheckCancel())
+            return;
         strip.clear();
         strip.setPixelColor(i, red / 10, green / 10, blue / 10);
         for (int j = 1; j <= EyeSize; j++) {
@@ -1429,6 +1464,8 @@ void CylonBounce(byte red, byte green, byte blue, int EyeSize, int SpeedDelay, i
     delay(ReturnDelay);
 
     for (int i = stripLength - EyeSize - 2; i > 0; i--) {
+        if (CheckCancel())
+            return;
         strip.clear();
         strip.setPixelColor(i, red / 10, green / 10, blue / 10);
         for (int j = 1; j <= EyeSize; j++) {
@@ -1451,6 +1488,8 @@ void TwinkleRandom(int Count, int SpeedDelay, boolean OnlyOne) {
     byte brightness = (255 * nStripBrightness) / 100;
 
     for (int i = 0; i < Count; i++) {
+        if (CheckCancel())
+            return;
         strip.setPixelColor(random(stripLength), random(0, brightness), random(0, brightness), random(0, brightness));
         strip.show();
         delay(SpeedDelay);
@@ -1474,6 +1513,7 @@ void TestBouncingBalls() {
 
     BouncingColoredBalls(colors);
 }
+
 void BouncingColoredBalls(byte colors[][3]) {
     float Gravity = -9.81;
     int StartHeight = 1;
@@ -1498,7 +1538,11 @@ void BouncingColoredBalls(byte colors[][3]) {
     // run for 30 seconds
     long start = millis();
     while (millis() < start + 10000) {
+        if (CheckCancel())
+            return;
         for (int i = 0; i < BallCount; i++) {
+            if (CheckCancel())
+                return;
             TimeSinceLastBounce[i] = millis() - ClockTimeSinceLastBounce[i];
             Height[i] = 0.5 * Gravity * pow(TimeSinceLastBounce[i] / 1000, 2.0) + ImpactVelocity[i] * TimeSinceLastBounce[i] / 1000;
 
@@ -1515,6 +1559,8 @@ void BouncingColoredBalls(byte colors[][3]) {
         }
 
         for (int i = 0; i < BallCount; i++) {
+            if (CheckCancel())
+                return;
             strip.setPixelColor(Position[i], colors[i][0], colors[i][1], colors[i][2]);
         }
 
@@ -1532,10 +1578,12 @@ void meteorRain(byte red, byte green, byte blue, byte meteorSize, byte meteorTra
     strip.clear();
 
     for (int i = 0; i < stripLength + stripLength; i++) {
-
-
+        if (CheckCancel())
+            return;
         // fade brightness all LEDs one step
         for (int j = 0; j < stripLength; j++) {
+            if (CheckCancel())
+                return;
             if ((!meteorRandomDecay) || (random(10) > 5)) {
                 fadeToBlack(j, meteorTrailDecay);
             }
@@ -1543,6 +1591,8 @@ void meteorRain(byte red, byte green, byte blue, byte meteorSize, byte meteorTra
 
         // draw meteor
         for (int j = 0; j < meteorSize; j++) {
+            if (CheckCancel())
+                return;
             if ((i - j < stripLength) && (i - j >= 0)) {
                 strip.setPixelColor(i - j, red, green, blue);
             }
