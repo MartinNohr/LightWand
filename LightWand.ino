@@ -79,6 +79,7 @@ enum keyvals { KEYNONE = -1, KEYRIGHT = 0, KEYUP, KEYDOWN, KEYLEFT, KEYSELECT, N
 int adc_key_in;
 int key = -1;
 int oldkey = -1;
+bool bWaitForKeyNone = false;       // set this after SELECT so holding the key won't try to cancel the run
 
 // SD Card Variables and assignments
 #define OPEN_FOLDER_CHAR '\x7e'
@@ -385,9 +386,8 @@ void loop() {
 
 void HandleKeySelect()
 {
-    // don't run until key released
-    while (ReadKeypad() != KEYNONE)
-        ;
+    // make sure we wait before accepting this key again
+    bWaitForKeyNone = true;
     int chainNumber = FileCountOnly() - CurrentFileIndex;
     bool isFolder = ProcessFileOrTest(bChainFiles ? chainNumber : 0);
     isFolder |= FileNames[CurrentFileIndex][0] == OPEN_FOLDER_CHAR
@@ -790,7 +790,6 @@ int ReadKeypad() {
 }
 
 
-
 // Convert ADC value to key number
 int get_key(unsigned int input) {
     if (digitalRead(AuxButton) == LOW) {
@@ -1119,31 +1118,44 @@ void ReadAndDisplayFile() {
 // see if they want to cancel
 bool CheckCancel()
 {
+    static bool bReadyToCancel = false;
+    static bool bCancelPending = false;
+    // don't run until key released
+    if (bWaitForKeyNone && ReadKeypad() != KEYNONE)
+        return false;
+    bWaitForKeyNone = false;
     bool retflag = false;
     int key = ReadKeypad();
     if (key == KEYSELECT) {
-        lcd.setCursor(0, 0);
-        lcd.print("Select to cancel");
-        while (ReadKeypad() != KEYNONE)
-            ;
-        while (true) {
-            key = ReadKeypad();
+        if (!bCancelPending) {
+            lcd.setCursor(0, 0);
+            lcd.print("Cancel?  ");
+            bCancelPending = true;
+            bReadyToCancel = false;
+            Serial.println("cancel pending");
+            return false;
+        }
+        key = ReadKeypad();
+        if (bReadyToCancel) {
+            bCancelPending = false;
             if (key == KEYSELECT) {
-                // cancel here
-                while (ReadKeypad() != KEYNONE)
-                    ;
+                Serial.println("cancel");
                 bCancelRun = true;
                 retflag = true;
-                break;
-            }
-            else if (key == KEYNONE)
-                continue;
-            else {
-                lcd.setCursor(0, 0);
-                lcd.print("                ");
-                break;
             }
         }
+    }
+    else if (bCancelPending && !bReadyToCancel && key == KEYNONE) {
+        Serial.println("ready to cancel");
+        bReadyToCancel = true;
+        return false;
+    }
+    else if (bReadyToCancel && key != KEYNONE) {
+        bReadyToCancel = false;
+        bCancelPending = false;
+        Serial.println("cancel cancel");
+        lcd.setCursor(0, 0);
+        lcd.print("                ");
     }
     return retflag;
 }
