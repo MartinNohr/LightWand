@@ -1129,31 +1129,27 @@ bool CheckCancel()
     if (key == KEYSELECT) {
         if (!bCancelPending) {
             lcd.setCursor(0, 0);
-            lcd.print("Cancel?  ");
+            lcd.print("Cancel?   ");
             bCancelPending = true;
             bReadyToCancel = false;
-            Serial.println("cancel pending");
             return false;
         }
         key = ReadKeypad();
         if (bReadyToCancel) {
             bCancelPending = false;
             if (key == KEYSELECT) {
-                Serial.println("cancel");
                 bCancelRun = true;
                 retflag = true;
             }
         }
     }
     else if (bCancelPending && !bReadyToCancel && key == KEYNONE) {
-        Serial.println("ready to cancel");
         bReadyToCancel = true;
         return false;
     }
     else if (bReadyToCancel && key != KEYNONE) {
         bReadyToCancel = false;
         bCancelPending = false;
-        Serial.println("cancel cancel");
         lcd.setCursor(0, 0);
         lcd.print("                ");
     }
