@@ -187,6 +187,31 @@ int nMaxBackLight = 75;                 // maximum backlight to use in %
 int nBackLightSeconds = 10;             // how long to leave the backlight on before dimming
 volatile bool bBackLightOn = false;     // used by backlight timer to indicate that backlight is on
 volatile bool bTurnOnBacklight = true;  // set to turn the backlight on, safer than calling the BackLightControl code
+
+struct saveValues {
+    void* val;
+    int size;
+};
+const saveValues saveValueList[] = {
+    {&signature, sizeof signature},
+    {&bAutoLoadSettings, sizeof bAutoLoadSettings},
+    {&nStripBrightness, sizeof nStripBrightness},
+    {&frameHold, sizeof frameHold},
+    {&startDelay, sizeof startDelay},
+    {&repeat, sizeof repeat},
+    {&repeatCount, sizeof repeatCount},
+    {&repeatDelay, sizeof repeatDelay},
+    {&bGammaCorrection, sizeof bGammaCorrection},
+    {&stripLength, sizeof stripLength},
+    {&nBackLightSeconds, sizeof nBackLightSeconds},
+    {&nMaxBackLight, sizeof nMaxBackLight},
+    {&CurrentFileIndex,sizeof CurrentFileIndex},
+    {&nTestNumber,sizeof nTestNumber},
+    {&bScaleHeight,sizeof bScaleHeight},
+    {&bChainFiles,sizeof bChainFiles},
+};
+
+                                        
 // timers to run things
 auto backLightTimer = timer_create_default();
 // this gets called every second/TIMERSTEPS
@@ -656,37 +681,46 @@ bool ProcessFileOrTest(int chainnumber)
     strip.show();
 }
 
+// save or restore all the settings that are relevant
+// this is used when reading the LWC associated with a file
+bool SettingsSaveRestore(bool save)
+{
+    static void* memptr = NULL;
+    if (save) {
+        // get some memory and save the values
+        if (memptr)
+            free(memptr);
+        memptr = malloc(sizeof saveValueList);
+        if (!memptr)
+            return false;
+    }
+    else {
+        // if it was saved, restore it and free the memory
+        if (memptr) {
+            free(memptr);
+        }
+    }
+    void* blockptr = memptr;
+    for (int ix = 0; ix < (sizeof saveValueList / sizeof * saveValueList); ++ix) {
+        if (save) {
+            memcpy(blockptr, saveValueList[ix].val, saveValueList[ix].size);
+        }
+        else {
+            memcpy(saveValueList[ix].val, blockptr, saveValueList[ix].size);
+        }
+        blockptr = (void*)((byte*)blockptr + saveValueList[ix].size);
+    }
+    return true;
+}
 
 // save some settings in the eeprom
 // if autoload is true, check the first flag, and load the rest if it is true
 void SaveSettings(bool save, bool autoload)
 {
     void* blockpointer = (void*)NULL;
-    struct saveValues {
-        void* val;
-        int size;
-    };
-    const saveValues valueList[] = {
-        {&signature, sizeof signature},
-        {&bAutoLoadSettings, sizeof bAutoLoadSettings},
-        {&nStripBrightness, sizeof nStripBrightness},
-        {&frameHold, sizeof frameHold},
-        {&startDelay, sizeof startDelay},
-        {&repeat, sizeof repeat},
-        {&repeatCount, sizeof repeatCount},
-        {&repeatDelay, sizeof repeatDelay},
-        {&bGammaCorrection, sizeof bGammaCorrection},
-        {&stripLength, sizeof stripLength},
-        {&nBackLightSeconds, sizeof nBackLightSeconds},
-        {&nMaxBackLight, sizeof nMaxBackLight},
-        {&CurrentFileIndex,sizeof CurrentFileIndex},
-        {&nTestNumber,sizeof nTestNumber},
-        {&bScaleHeight,sizeof bScaleHeight},
-        {&bChainFiles,sizeof bChainFiles},
-    };
-    for (int ix = 0; ix < (sizeof valueList / sizeof * valueList); ++ix) {
+    for (int ix = 0; ix < (sizeof saveValueList / sizeof * saveValueList); ++ix) {
         if (save) {
-            eeprom_write_block(valueList[ix].val, blockpointer, valueList[ix].size);
+            eeprom_write_block(saveValueList[ix].val, blockpointer, saveValueList[ix].size);
         }
         else {  // load
             // check signature
@@ -701,7 +735,7 @@ void SaveSettings(bool save, bool autoload)
                 delay(1000);
                 return;
             }
-            eeprom_read_block(valueList[ix].val, blockpointer, valueList[ix].size);
+            eeprom_read_block(saveValueList[ix].val, blockpointer, saveValueList[ix].size);
             // if autoload, exit if the save value is not true
             if (autoload && ix == 0) {
                 if (!bAutoLoadSettings) {
@@ -709,7 +743,7 @@ void SaveSettings(bool save, bool autoload)
                 }
             }
         }
-        blockpointer = (void*)((byte*)blockpointer + valueList[ix].size);
+        blockpointer = (void*)((byte*)blockpointer + saveValueList[ix].size);
     }
     if (!save) {
         int savedFileIndex = CurrentFileIndex;
@@ -822,6 +856,13 @@ String GetFilePath()
 void SendFile(String Filename) {
     char temp[14];
     Filename.toCharArray(temp, 14);
+    // see if there is an associated config file
+    String cfFile = temp;
+    cfFile = cfFile.substring(0, cfFile.lastIndexOf('.')+1);
+    cfFile += "LWC";
+    bool bDidSettingsFile = ProcessConfigFile(cfFile);
+    if (bDidSettingsFile)
+        SettingsSaveRestore(true);
     String fn = GetFilePath() + temp;
     dataFile = SD.open(fn);
 
@@ -841,6 +882,8 @@ void SendFile(String Filename) {
         setupSDcard();
         return;
     }
+    if (bDidSettingsFile)
+        SettingsSaveRestore(false);
 }
 
 void DisplayCurrentFilename() {
@@ -900,8 +943,9 @@ void GetFileNamesFromSD(File dir) {
 }
 
 // process the lines in the config file
-void ProcessConfigFile(String filename)
+bool ProcessConfigFile(String filename)
 {
+    bool retval = true;
     SDLib::File file;
     String filepath = GetFilePath() + filename;
     file = SD.open(filepath);
@@ -939,6 +983,9 @@ void ProcessConfigFile(String filename)
             }
         }
     }
+    else
+        retval = false;
+    return retval;
 }
 
 
