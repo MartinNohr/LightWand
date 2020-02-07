@@ -80,6 +80,7 @@ int adc_key_in;
 int key = -1;
 int oldkey = -1;
 bool bWaitForKeyNone = false;       // set this after SELECT so holding the key won't try to cancel the run
+String sCurrentLine0;
 
 // SD Card Variables and assignments
 #define OPEN_FOLDER_CHAR '\x7e'
@@ -595,6 +596,8 @@ bool ProcessFileOrTest(int chainnumber)
         if (first != OPEN_FOLDER_CHAR && first != OPEN_PARENT_FOLDER_CHAR) {
             sprintf(line, "Repeat %d", counter);
             lcd.print(line);
+            // save this for restoring if cancel is cancelled
+            sCurrentLine0 = line;
         }
         if (menuItem == mTest) {
             // run the test
@@ -1118,6 +1121,7 @@ void ReadAndDisplayFile() {
 // see if they want to cancel
 bool CheckCancel()
 {
+    static long waitForIt;
     static bool bReadyToCancel = false;
     static bool bCancelPending = false;
     // don't run until key released
@@ -1145,13 +1149,14 @@ bool CheckCancel()
     }
     else if (bCancelPending && !bReadyToCancel && key == KEYNONE) {
         bReadyToCancel = true;
+        waitForIt = millis();
         return false;
     }
-    else if (bReadyToCancel && key != KEYNONE) {
+    else if (bReadyToCancel && ((key != KEYNONE) || (millis() > waitForIt + 5000))) {
         bReadyToCancel = false;
         bCancelPending = false;
         lcd.setCursor(0, 0);
-        lcd.print("                ");
+        lcd.print(sCurrentLine0);
     }
     return retflag;
 }
