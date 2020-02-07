@@ -159,6 +159,7 @@ enum e_menuitem {
     mBackLightBrightness,
     mBackLightTimer,
     mAutoLoadSettings,
+    mSaveAssociatedSettings,
     mSavedSettings,
     MAXMENU = mSavedSettings
 };
@@ -177,6 +178,7 @@ const char* menuStrings[] = {
     "LCD Brightness",
     "LCD Timeout",
     "Autoload Sets",
+    "Save Config For",
     "Saved Settings",
 };
 
@@ -348,6 +350,8 @@ void loop() {
         case mAutoLoadSettings:
             lcd.print(bAutoLoadSettings ? "ON" : "OFF");
             break;
+        case mSaveAssociatedSettings:
+            lcd.print("?" + CurrentFilename);
         }
         lastMenuItem = menuItem;
     }
@@ -412,6 +416,14 @@ void loop() {
 
 void HandleKeySelect()
 {
+    if (menuItem == mSaveAssociatedSettings) {
+        if (CreateConfigFile(CurrentFilename)) {
+            lcd.setCursor(0, 0);
+            lcd.print("Saved Associated");
+            delay(1000);
+        }
+        return;
+    }
     // make sure we wait before accepting this key again
     bWaitForKeyNone = true;
     int chainNumber = FileCountOnly() - CurrentFileIndex;
@@ -858,8 +870,7 @@ void SendFile(String Filename) {
     Filename.toCharArray(temp, 14);
     // see if there is an associated config file
     String cfFile = temp;
-    cfFile = cfFile.substring(0, cfFile.lastIndexOf('.')+1);
-    cfFile += "LWC";
+    cfFile = MakeLWCFilename(cfFile);
     bool bDidSettingsFile = ProcessConfigFile(cfFile);
     if (bDidSettingsFile)
         SettingsSaveRestore(true);
@@ -986,6 +997,44 @@ bool ProcessConfigFile(String filename)
     else
         retval = false;
     return retval;
+}
+
+// create the config file
+bool CreateConfigFile(String filename)
+{
+    bool retval = true;
+    SDLib::File file;
+    String name = MakeLWCFilename(filename);
+    String filepath = GetFilePath() + name;
+    file = SD.open(filepath, O_READ | O_WRITE | O_CREAT | O_TRUNC);
+    String line;
+    if (file) {
+        file.seek(0);
+        line = "PIXELS=" + String(stripLength);
+        file.println(line);
+        line = "BRIGHTNESS=" + String(nStripBrightness);
+        file.println(line);
+        line = "REPEAT COUNT=" + String(repeatCount);
+        file.println(line);
+        line = "REPEAT DELAY=" + String(repeatDelay);
+        file.println(line);
+        line = "FRAME TIME=" + String(frameHold);
+        file.println(line);
+        line = "START DELAY=" + String(startDelay);
+        file.println(line);
+        file.close();
+    }
+    else
+        retval = false;
+    return retval;
+}
+
+String MakeLWCFilename(String filename)
+{
+    String cfFile = filename;
+    cfFile = cfFile.substring(0, cfFile.lastIndexOf('.') + 1);
+    cfFile += "LWC";
+    return cfFile;
 }
 
 
