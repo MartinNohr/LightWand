@@ -50,12 +50,54 @@ int g = 0;                                // Variable for the Green Value
 int b = 0;                                // Variable for the Blue Value
 int r = 0;                                // Variable for the Red Value
 
+// menu strings
+enum e_menuitem {
+    mFirstMenu,
+    mSelectFile = mFirstMenu,
+    mFrameHoldTime,
+    mStripBrightness,
+    mInitDelay,
+    mRepeatCount,
+    mRepeatDelay,
+    mChainFiles,
+    mGammaCorrection,
+    mStripLength,
+    mScaleHeight,
+    mBackLightBrightness,
+    mBackLightTimer,
+    mAutoLoadSettings,
+    mSavedSettings,
+    mTestPatterns,
+    mDeleteConfigFile,
+    mSaveConfigFile,
+    MAXMENU
+};
+const char* menuStrings[] = {
+    "File",
+    "Frame Time",
+    "Brightness",
+    "Init Delay",
+    "Repeat Count",
+    "Repeat Delay",
+    "Chain Files",
+    "Gamma Correct",
+    "Strip Length",
+    "Scale Height",
+    "LCD Brightness",
+    "LCD Timeout",
+    "Autoload Sets",
+    "Saved Settings",
+    "Test Patterns",
+    "Delete File CFG",
+    "Save File CFG",
+};
+
 // Initial Variable declarations and assignments (Make changes to these if you want to change defaults)
 char signature[]{ "MLW" };                // set to make sure saved values are valid
 int stripLength = 144;                    // Set the number of LEDs the LED Strip
 int frameHold = 25;                       // default for the frame delay 
 int lastMenuItem = -1;                    // check to see if we need to redraw menu
-int menuItem = 1;                         // Variable for current main menu selection
+int menuItem = mFirstMenu;                // Variable for current main menu selection
 int startDelay = 0;                        // Variable for delay between button press and start of light sequence, in seconds
 int repeat = 0;                           // Variable to select auto repeat (until select button is pressed again)
 int repeatDelay = 0;                      // Variable for delay between repeats
@@ -143,46 +185,6 @@ const char* testStrings[MAXTEST] = {
 // which one to use
 int nTestNumber = 0;
 
-// menu strings
-enum e_menuitem {
-    mSelectFile = 1,
-    mFrameHoldTime,
-    mStripBrightness,
-    mInitDelay,
-    mRepeatCount,
-    mRepeatDelay,
-    mChainFiles,
-    mGammaCorrection,
-    mStripLength,
-    mScaleHeight,
-    mTest,
-    mBackLightBrightness,
-    mBackLightTimer,
-    mAutoLoadSettings,
-    mSaveConfigFile,
-    mDeleteConfigFile,
-    mSavedSettings,
-    MAXMENU = mSavedSettings
-};
-const char* menuStrings[] = {
-    "File",
-    "Frame Time",
-    "Brightness",
-    "Init Delay",
-    "Repeat Count",
-    "Repeat Delay",
-    "Chain Files",
-    "Gamma Correct",
-    "Strip Length",
-    "Scale Height",
-    "Test",
-    "LCD Brightness",
-    "LCD Timeout",
-    "Autoload Sets",
-    "Save File CFG",
-    "Delete File CFG",
-    "Saved Settings",
-};
 
 // storage for special character
 byte chZeroPattern[8];
@@ -290,11 +292,11 @@ void loop() {
         lcd.clear();
         lcd.setCursor(0, 0);
         lcd.write((byte)0);
-        lcd.print(menuStrings[menuItem - 1]);
+        lcd.print(menuStrings[menuItem]);
         if (menuItem == mSelectFile) {
             lcd.print(" " + String(CurrentFileIndex + 1) + "/" + String(NumberOfFiles));
         }
-        if (menuItem == mTest) {
+        if (menuItem == mTestPatterns) {
             lcd.print(" " + String(nTestNumber + 1) + "/" + String(MAXTEST));
         }
         lcd.setCursor(0, 1);
@@ -327,7 +329,7 @@ void loop() {
         case mRepeatDelay:
             lcd.print(String(repeatDelay) + " mSec");
             break;
-        case mTest:
+        case mTestPatterns:
             lcd.print(testStrings[nTestNumber]);
             break;
         case mBackLightBrightness:
@@ -390,10 +392,10 @@ void loop() {
     }
 
     if ((keypress == KEYUP)) {                 // The up key was pressed
-        menuItem = menuItem == 1 ? MAXMENU : menuItem - 1;
+        menuItem = menuItem > mFirstMenu ? menuItem - 1 : MAXMENU - 1;
     }
     if ((keypress == KEYDOWN)) {                 // The down key was pressed
-        menuItem = menuItem == MAXMENU ? 1 : menuItem + 1;
+        menuItem = menuItem < MAXMENU - 1 ? menuItem + 1 : mFirstMenu;
     }
     // wait a bit between keypresses
     if (keypress == KEYNONE) {
@@ -486,7 +488,7 @@ void HandleKeyRight()
     else if (menuItem == mRepeatDelay) {
         repeatDelay += 100;
     }
-    else if (menuItem == mTest) {
+    else if (menuItem == mTestPatterns) {
         ++nTestNumber;
         if (nTestNumber >= MAXTEST)
             nTestNumber = 0;
@@ -563,7 +565,7 @@ void HandleKeyLeft()
             repeatDelay -= 100;
         }
     }
-    else if (menuItem == mTest) {
+    else if (menuItem == mTestPatterns) {
         --nTestNumber;
         if (nTestNumber < 0)
             nTestNumber = MAXTEST - 1;
@@ -633,7 +635,7 @@ bool ProcessFileOrTest(int chainnumber)
     for (int counter = repeatCount; counter > 0; counter--) {
         lcd.clear();
         lcd.setCursor(0, 1);
-        if (menuItem == mTest) {
+        if (menuItem == mTestPatterns) {
             lcd.print(testStrings[nTestNumber]);
         }
         else {
@@ -654,7 +656,7 @@ bool ProcessFileOrTest(int chainnumber)
             // save this for restoring if cancel is cancelled
             sCurrentLine0 = line;
         }
-        if (menuItem == mTest) {
+        if (menuItem == mTestPatterns) {
             // run the test
             (*testFunctions[nTestNumber])();
         }
