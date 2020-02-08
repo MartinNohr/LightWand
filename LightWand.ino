@@ -1214,12 +1214,17 @@ void ReadAndDisplayFile() {
     long secondsLeft = 0, lastSeconds = 0;
     char num[8];
     for (int y = imgHeight; y > 0; y--) {
-        lcd.setCursor(11, 0);
         // approximate time left
         secondsLeft = (((y * 10L) / 384L) + 1L) + (y * (long)frameHold / 1000L);
         if (secondsLeft != lastSeconds) {
+            lcd.setCursor(11, 0);
             lastSeconds = secondsLeft;
             sprintf(num, "%3d S", secondsLeft);
+            lcd.print(num);
+        }
+        if ((y % 10) == 0) {
+            lcd.setCursor(12, 1);
+            sprintf(num, "%4d", y);
             lcd.print(num);
         }
         int bufpos = 0;
