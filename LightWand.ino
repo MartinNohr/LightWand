@@ -56,9 +56,9 @@ enum e_menuitem {
     mSelectFile = mFirstMenu,
     mFrameHoldTime,
     mStripBrightness,
-    mInitDelay,
     mRepeatCount,
     mRepeatDelay,
+    mInitDelay,
     mChainFiles,
     mGammaCorrection,
     mStripLength,
@@ -76,9 +76,9 @@ const char* menuStrings[] = {
     "File",
     "Frame Time",
     "Brightness",
-    "Init Delay",
     "Repeat Count",
     "Repeat Delay",
+    "Init Delay",
     "Chain Files",
     "Gamma Correct",
     "Strip Length",
@@ -452,6 +452,9 @@ void HandleKeySelect()
         }
         CurrentFileIndex = savedFileIndex;
     }
+    // wait for release
+    while (ReadKeypad() != KEYNONE)
+        delay(10);
 }
 
 void HandleKeyRight()
