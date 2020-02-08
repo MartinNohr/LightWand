@@ -159,7 +159,8 @@ enum e_menuitem {
     mBackLightBrightness,
     mBackLightTimer,
     mAutoLoadSettings,
-    mSaveAssociatedSettings,
+    mSaveConfigFile,
+    mDeleteConfigFile,
     mSavedSettings,
     MAXMENU = mSavedSettings
 };
@@ -178,7 +179,8 @@ const char* menuStrings[] = {
     "LCD Brightness",
     "LCD Timeout",
     "Autoload Sets",
-    "Save Config For",
+    "Save File CFG",
+    "Delete File CFG",
     "Saved Settings",
 };
 
@@ -264,9 +266,9 @@ void setup() {
     setupSDcard();
     // turn on the keyboard reader
     digitalWrite(LED_BUILTIN, HIGH);
-    Serial.println("Finishing setup");
     SaveSettings(false, true);
     backLightTimer.every(1000 / TIMERSTEPS, BackLightControl);
+    Serial.println("Finishing setup");
 }
 
 // create a character by filling blocks to indicate how far down the menu we are
@@ -350,8 +352,11 @@ void loop() {
         case mAutoLoadSettings:
             lcd.print(bAutoLoadSettings ? "ON" : "OFF");
             break;
-        case mSaveAssociatedSettings:
-            lcd.print("?" + CurrentFilename);
+        case mDeleteConfigFile:
+            lcd.print("SELECT to Delete");
+            break;
+        case mSaveConfigFile:
+            lcd.print("<=Load >=Save");
         }
         lastMenuItem = menuItem;
     }
@@ -416,12 +421,11 @@ void loop() {
 
 void HandleKeySelect()
 {
-    if (menuItem == mSaveAssociatedSettings) {
-        if (CreateConfigFile(CurrentFilename)) {
-            lcd.setCursor(0, 0);
-            lcd.print("Saved Associated");
-            delay(1000);
-        }
+    if (menuItem == mDeleteConfigFile) {
+        WriteOrDeleteConfigFile(CurrentFilename, true);
+        lcd.setCursor(0, 1);
+        lcd.print("Deleted         ");
+        delay(1000);
         return;
     }
     // make sure we wait before accepting this key again
@@ -509,6 +513,13 @@ void HandleKeyRight()
     else if (menuItem == mAutoLoadSettings) {
         bAutoLoadSettings = !bAutoLoadSettings;
     }
+    else if (menuItem == mSaveConfigFile) {
+        if (WriteOrDeleteConfigFile(CurrentFilename, false)) {
+            lcd.setCursor(0, 0);
+            lcd.print("Saved CFG       ");
+            delay(1000);
+        }
+    }
 }
 
 void HandleKeyLeft()
@@ -581,6 +592,13 @@ void HandleKeyLeft()
     }
     else if (menuItem == mAutoLoadSettings) {
         bAutoLoadSettings = !bAutoLoadSettings;
+    }
+    else if (menuItem == mSaveConfigFile) {
+        if (WriteOrDeleteConfigFile(CurrentFilename, false)) {
+            lcd.setCursor(0, 0);
+            lcd.print("Loaded LWC");
+            delay(1000);
+        }
     }
 }
 
@@ -706,12 +724,6 @@ bool SettingsSaveRestore(bool save)
         if (!memptr)
             return false;
     }
-    else {
-        // if it was saved, restore it and free the memory
-        if (memptr) {
-            free(memptr);
-        }
-    }
     void* blockptr = memptr;
     for (int ix = 0; ix < (sizeof saveValueList / sizeof * saveValueList); ++ix) {
         if (save) {
@@ -721,6 +733,13 @@ bool SettingsSaveRestore(bool save)
             memcpy(saveValueList[ix].val, blockptr, saveValueList[ix].size);
         }
         blockptr = (void*)((byte*)blockptr + saveValueList[ix].size);
+    }
+    if (!save) {
+        // if it was saved, restore it and free the memory
+        if (memptr) {
+            free(memptr);
+            memptr = NULL;
+        }
     }
     return true;
 }
@@ -862,7 +881,10 @@ String GetFilePath()
     for (int ix = 0; ix <= folderLevel; ++ix) {
         path += folders[ix].name();
     }
-    return path + "/";
+    if (path == "/")
+        return path;
+    else
+        return path + "/";
 }
 
 void SendFile(String Filename) {
@@ -871,12 +893,10 @@ void SendFile(String Filename) {
     // see if there is an associated config file
     String cfFile = temp;
     cfFile = MakeLWCFilename(cfFile);
-    bool bDidSettingsFile = ProcessConfigFile(cfFile);
-    if (bDidSettingsFile)
-        SettingsSaveRestore(true);
+    SettingsSaveRestore(true);
+    ProcessConfigFile(cfFile);
     String fn = GetFilePath() + temp;
     dataFile = SD.open(fn);
-
     // if the file is available send it to the LED's
     if (dataFile) {
         ReadAndDisplayFile();
@@ -893,8 +913,7 @@ void SendFile(String Filename) {
         setupSDcard();
         return;
     }
-    if (bDidSettingsFile)
-        SettingsSaveRestore(false);
+    SettingsSaveRestore(false);
 }
 
 void DisplayCurrentFilename() {
@@ -961,36 +980,37 @@ bool ProcessConfigFile(String filename)
     String filepath = GetFilePath() + filename;
     file = SD.open(filepath);
     if (file) {
-        // read the lines and do what they say
         String line, command, args;
-        line = file.readString();
-        int ix = line.indexOf('=', 0);
-        if (ix > 0) {
-            command = line.substring(0, ix);
-            command.trim();
-            command.toUpperCase();
-            args = line.substring(ix + 1);
-            if (command == "PIXELS") {
-                stripLength = args.toInt();
-            }
-            else if (command == "BRIGHTNESS") {
-                nStripBrightness = args.toInt();
-                if (nStripBrightness < 1)
-                    nStripBrightness = 1;
-                else if (nStripBrightness > 100)
-                    nStripBrightness = 100;
-            }
-            else if (command == "REPEAT COUNT") {
-                repeatCount = args.toInt();
-            }
-            else if (command == "REPEAT DELAY") {
-                repeatDelay = args.toInt();
-            }
-            else if (command == "FRAME TIME") {
-                frameHold = args.toInt();
-            }
-            else if (command == "START DELAY") {
-                startDelay = args.toInt();
+        while ((line = file.readStringUntil('\n')), line.length()) {
+            // read the lines and do what they say
+            int ix = line.indexOf('=', 0);
+            if (ix > 0) {
+                command = line.substring(0, ix);
+                command.trim();
+                command.toUpperCase();
+                args = line.substring(ix + 1);
+                if (!command.compareTo("PIXELS")) {
+                    stripLength = args.toInt();
+                }
+                else if (command == "BRIGHTNESS") {
+                    nStripBrightness = args.toInt();
+                    if (nStripBrightness < 1)
+                        nStripBrightness = 1;
+                    else if (nStripBrightness > 100)
+                        nStripBrightness = 100;
+                }
+                else if (command == "REPEAT COUNT") {
+                    repeatCount = args.toInt();
+                }
+                else if (command == "REPEAT DELAY") {
+                    repeatDelay = args.toInt();
+                }
+                else if (command == "FRAME TIME") {
+                    frameHold = args.toInt();
+                }
+                else if (command == "START DELAY") {
+                    startDelay = args.toInt();
+                }
             }
         }
     }
@@ -999,33 +1019,37 @@ bool ProcessConfigFile(String filename)
     return retval;
 }
 
-// create the config file
-bool CreateConfigFile(String filename)
+// create the config file, or remove it
+bool WriteOrDeleteConfigFile(String filename, bool remove)
 {
     bool retval = true;
     SDLib::File file;
     String name = MakeLWCFilename(filename);
     String filepath = GetFilePath() + name;
-    file = SD.open(filepath, O_READ | O_WRITE | O_CREAT | O_TRUNC);
-    String line;
-    if (file) {
-        file.seek(0);
-        line = "PIXELS=" + String(stripLength);
-        file.println(line);
-        line = "BRIGHTNESS=" + String(nStripBrightness);
-        file.println(line);
-        line = "REPEAT COUNT=" + String(repeatCount);
-        file.println(line);
-        line = "REPEAT DELAY=" + String(repeatDelay);
-        file.println(line);
-        line = "FRAME TIME=" + String(frameHold);
-        file.println(line);
-        line = "START DELAY=" + String(startDelay);
-        file.println(line);
-        file.close();
+    if (remove) {
+        SD.remove(filepath);
     }
-    else
-        retval = false;
+    else {
+        file = SD.open(filepath, O_READ | O_WRITE | O_CREAT | O_TRUNC);
+        String line;
+        if (file) {
+            line = "PIXELS=" + String(stripLength);
+            file.println(line);
+            line = "BRIGHTNESS=" + String(nStripBrightness);
+            file.println(line);
+            line = "REPEAT COUNT=" + String(repeatCount);
+            file.println(line);
+            line = "REPEAT DELAY=" + String(repeatDelay);
+            file.println(line);
+            line = "FRAME TIME=" + String(frameHold);
+            file.println(line);
+            line = "START DELAY=" + String(startDelay);
+            file.println(line);
+            file.close();
+        }
+        else
+            retval = false;
+    }
     return retval;
 }
 
