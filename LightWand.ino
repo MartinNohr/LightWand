@@ -277,7 +277,7 @@ void setup() {
 void CreateMenuCharacter()
 {
     memset(chZeroPattern, 0, sizeof chZeroPattern);
-    for (int menu = 0; menu < menuItem; ++menu) {
+    for (int menu = 0; menu <= menuItem; ++menu) {
         chZeroPattern[menu % 7] |= (1 << (4 - menu / 7));
     }
     lcd.createChar(0, chZeroPattern);
@@ -639,7 +639,7 @@ bool ProcessFileOrTest(int chainnumber)
             lcd.print(testStrings[nTestNumber]);
         }
         else {
-            lcd.print(CurrentFilename);
+            DisplayCurrentFilename();
         }
         if (chainnumber) {
             lcd.setCursor(13, 1);
@@ -920,10 +920,12 @@ void SendFile(String Filename) {
 
 void DisplayCurrentFilename() {
     CurrentFilename = FileNames[CurrentFileIndex];
+    // strip extension
+    String sname = CurrentFilename.substring(0, CurrentFilename.lastIndexOf('.'));
     lcd.setCursor(0, 1);
     lcd.print("                ");
     lcd.setCursor(0, 1);
-    lcd.print(CurrentFilename);
+    lcd.print(sname);
 }
 
 
@@ -1203,8 +1205,7 @@ void ReadAndDisplayFile() {
     if ((lineLength % 4) != 0)
         lineLength = (lineLength / 4 + 1) * 4;
 
-
-
+    
     // Note:  
     // The x,r,b,g sequence below might need to be changed if your strip is displaying
     // incorrect colors.  Some strips use an x,r,b,g sequence and some use x,r,g,b
@@ -1225,6 +1226,7 @@ void ReadAndDisplayFile() {
         //uint32_t offset = (MYBMP_BF_OFF_BITS + ((y - 1) * lineLength));
         //dataFile.seek(offset);
         for (int x = 0; x < displayWidth; x++) {
+            // moved this back here because it might make it possible to reverse scan in the future
             dataFile.seek((uint32_t)MYBMP_BF_OFF_BITS + (((y - 1) * lineLength) + (x * 3)));
             getRGBwithGamma();
             // see if we want this one
