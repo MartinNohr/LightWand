@@ -87,7 +87,7 @@ const char* menuStrings[] = {
     "LCD Timeout",
     "Autoload Sets",
     "Saved Settings",
-    "Test Patterns",
+    "Tests",
     "Delete File CFG",
     "Save File CFG",
 };
