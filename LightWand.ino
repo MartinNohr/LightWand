@@ -374,37 +374,36 @@ void loop() {
             return;
         }
     }
-    // run the file selected except when test menu is up, then run the test
-    if (keypress == KEYSELECT) {    // The select key or the button was pressed
+    switch (keypress) {
+    case KEYSELECT:
         HandleKeySelect();
         lastMenuItem = -1;  // show the menu again
-    }
-    if (keypress == KEYRIGHT) {                    // The Right Key was Pressed
-        HandleKeyRight();
-        // redraw
-        lastMenuItem = -1;
-    }
-
-    if (keypress == KEYLEFT) {                    // The Left Key was Pressed
+        break;
+    case KEYUP:
+        menuItem = menuItem > mFirstMenu ? menuItem - 1 : MAXMENU - 1;
+        break;
+    case KEYDOWN:
+        menuItem = menuItem < MAXMENU - 1 ? menuItem + 1 : mFirstMenu;
+        break;
+    case KEYLEFT:
         HandleKeyLeft();
         // redraw
         lastMenuItem = -1;
-    }
-
-    if ((keypress == KEYUP)) {                 // The up key was pressed
-        menuItem = menuItem > mFirstMenu ? menuItem - 1 : MAXMENU - 1;
-    }
-    if ((keypress == KEYDOWN)) {                 // The down key was pressed
-        menuItem = menuItem < MAXMENU - 1 ? menuItem + 1 : mFirstMenu;
-    }
-    // wait a bit between keypresses
-    if (keypress == KEYNONE) {
+        break;
+    case KEYRIGHT:
+        HandleKeyRight();
+        // redraw
+        lastMenuItem = -1;
+        break;
+    case KEYNONE:
         // no key is pressed, reset the timer
         startKeyDown = 0;
         // and the keypause
         kbdWaitTime = KEYWAITPAUSE;
+        break;
     }
-    else {
+    // wait a bit between keypresses
+    if (keypress != KEYNONE) {
         // a key is down
         // remember the time it was pressed
         if (startKeyDown == 0) {
@@ -412,15 +411,16 @@ void loop() {
         }
         // calcualate how long to wait
         unsigned long now = millis();
-        if (now > startKeyDown + 2000)
-            kbdWaitTime = KEYWAITPAUSE / 4;
-        if (now > startKeyDown + 4000)
+        if (now > startKeyDown + 3000)
+            kbdWaitTime = KEYWAITPAUSE / 5;
+        if (now > startKeyDown + 6000)
             kbdWaitTime = KEYWAITPAUSE / 10;
         // do the prescribed wait
         delay(kbdWaitTime);
     }
 }
 
+// always run the current file unless the test menu is slected
 void HandleKeySelect()
 {
     if (menuItem == mDeleteConfigFile) {
@@ -483,7 +483,12 @@ void HandleKeyRight()
         ++startDelay;
     }
     else if (menuItem == mFrameHoldTime) {
-        frameHold += 1;
+        if (KEYWAITPAUSE != kbdWaitTime) {
+            frameHold = ((frameHold / 10) * 10) + 10;
+        }
+        else {
+            ++frameHold;
+        }
     }
     else if (menuItem == mRepeatCount) {
         repeatCount += 1;
@@ -554,8 +559,14 @@ void HandleKeyLeft()
         }
     }
     else if (menuItem == mFrameHoldTime) {
-        if (frameHold > 0) {
-            frameHold -= 1;
+        if (KEYWAITPAUSE != kbdWaitTime) {
+            frameHold = ((frameHold / 10) * 10) - 10;
+        }
+        else {
+            --frameHold;
+        }
+        if (frameHold < 0) {
+            frameHold = 0;
         }
     }
     else if (menuItem == mRepeatCount) {
