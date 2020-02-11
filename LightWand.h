@@ -1,5 +1,5 @@
 #pragma once
 
-bool CheckCancel(bool& retflag);
+bool CheckCancel();
 
 String MakeLWCFilename(String filename);

@@ -1009,6 +1009,7 @@ bool ProcessConfigFile(String filename)
                 args = line.substring(ix + 1);
                 if (!command.compareTo("PIXELS")) {
                     stripLength = args.toInt();
+                    strip.updateLength(stripLength);
                 }
                 else if (command == "BRIGHTNESS") {
                     nStripBrightness = args.toInt();
