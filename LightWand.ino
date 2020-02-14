@@ -148,6 +148,7 @@ enum e_tests {
     mtDots = 0,
     mtTwoDots,
     mtRandomBars,
+    mtRandomColors,
     mtCheckerBoard,
     mtRandomRunningDot,
     mtBarberPole,
@@ -162,6 +163,7 @@ void (*testFunctions[MAXTEST])() = {
     RunningDot,
     OppositeRunningDots,
     RandomBars,
+    RandomColors,
     CheckerBoard,
     RandomRunningDot,
     BarberPole,
@@ -174,6 +176,7 @@ const char* testStrings[MAXTEST] = {
     "Running Dot",
     "Opposite Dots",
     "Random Bars",
+    "Random Colors",
     "Checker Board",
     "Random Run Dot",
     "Barber Pole",
@@ -1369,7 +1372,7 @@ void CheckerBoard()
     }
 }
 
-// show random bars of lights, 20 times
+// show random bars of lights with blacks between, 50 times
 void RandomBars()
 {
     byte r, g, b;
@@ -1399,6 +1402,31 @@ void RandomBars()
             //    strip.setPixelColor(ix, r, g, b);
             //}
         }
+        strip.show();
+        delay(frameHold);
+    }
+}
+
+// show random bars of lights, 50 times
+void RandomColors()
+{
+    byte r, g, b;
+    srand(millis());
+    char line[] = "                ";
+    //    lcd.setCursor(0, 1);
+    //    lcd.write(line, 16);
+    for (int pass = 0; pass < 50; ++pass) {
+        if (CheckCancel())
+            return;
+        sprintf(line, "%2d/50", pass + 1);
+        lcd.setCursor(10, 0);
+        lcd.print(line);
+        r = random(0, 255);
+        g = random(0, 255);
+        b = random(0, 255);
+        fixRGBwithGamma(&r, &g, &b);
+        // fill the strip color
+        strip.fill(strip.Color(r, g, b), 0, stripLength);
         strip.show();
         delay(frameHold);
     }
