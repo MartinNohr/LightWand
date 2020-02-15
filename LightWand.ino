@@ -95,7 +95,7 @@ const char* menuStrings[] = {
 // Initial Variable declarations and assignments (Make changes to these if you want to change defaults)
 char signature[]{ "MLW" };                // set to make sure saved values are valid
 int stripLength = 144;                    // Set the number of LEDs the LED Strip
-int frameHold = 25;                       // default for the frame delay 
+int frameHold = 50;                       // default for the frame delay 
 int lastMenuItem = -1;                    // check to see if we need to redraw menu
 int menuItem = mFirstMenu;                // Variable for current main menu selection
 int startDelay = 0;                        // Variable for delay between button press and start of light sequence, in seconds
@@ -222,7 +222,11 @@ const saveValues saveValueList[] = {
 
                                         
 // timers to run things
-auto backLightTimer = timer_create_default();
+auto EventTimers = timer_create_default();
+
+// set this to the delay time while we get the next frame
+bool bStripWaiting = false;
+
 // this gets called every second/TIMERSTEPS
 #define TIMERSTEPS 10
 bool BackLightControl(void*)
@@ -230,6 +234,10 @@ bool BackLightControl(void*)
     static int light;
     static int fade;
     static int timer;
+    // don't do anything while writing the file out
+    if (bStripWaiting) {
+        return;
+    }
     // change % to 0-255
     int abslight = 255 * nMaxBackLight / 100;
     if (bTurnOnBacklight) {
@@ -259,6 +267,14 @@ bool BackLightControl(void*)
     return true;    // repeat true
 }
 
+// counts the delay for the frame hold time
+bool StripDelay(void*)
+{
+    bTurnOnBacklight = true;
+    bStripWaiting = false;
+    return false;
+}
+
 // Setup loop to get everything ready.  This is only run once at power on or reset
 void setup() {
     Serial.begin(115200);
@@ -272,7 +288,7 @@ void setup() {
     // turn on the keyboard reader
     digitalWrite(LED_BUILTIN, HIGH);
     SaveSettings(false, true);
-    backLightTimer.every(1000 / TIMERSTEPS, BackLightControl);
+    EventTimers.every(1000 / TIMERSTEPS, BackLightControl);
     Serial.println("Finishing setup");
 }
 
@@ -289,7 +305,7 @@ void CreateMenuCharacter()
 // The Main Loop for the program starts here... 
 // This will loop endlessly looking for a key press to perform a function
 void loop() {
-    backLightTimer.tick();
+    EventTimers.tick();
     if (bBackLightOn && menuItem != lastMenuItem) {
         CreateMenuCharacter();
         lcd.clear();
@@ -418,6 +434,8 @@ void loop() {
             kbdWaitTime = KEYWAITPAUSE / 5;
         if (now > startKeyDown + 6000)
             kbdWaitTime = KEYWAITPAUSE / 10;
+        if (now > startKeyDown + 10000)
+            kbdWaitTime = KEYWAITPAUSE / 20;
         // do the prescribed wait
         delay(kbdWaitTime);
     }
@@ -486,12 +504,7 @@ void HandleKeyRight()
         ++startDelay;
     }
     else if (menuItem == mFrameHoldTime) {
-        if (KEYWAITPAUSE != kbdWaitTime) {
-            frameHold = ((frameHold / 10) * 10) + 10;
-        }
-        else {
-            ++frameHold;
-        }
+        ++frameHold;
     }
     else if (menuItem == mRepeatCount) {
         repeatCount += 1;
@@ -562,14 +575,9 @@ void HandleKeyLeft()
         }
     }
     else if (menuItem == mFrameHoldTime) {
-        if (KEYWAITPAUSE != kbdWaitTime) {
-            frameHold = ((frameHold / 10) * 10) - 10;
-        }
-        else {
-            --frameHold;
-        }
-        if (frameHold < 0) {
-            frameHold = 0;
+        --frameHold;
+        if (frameHold < 30) {
+            frameHold = 30;
         }
     }
     else if (menuItem == mRepeatCount) {
@@ -1084,11 +1092,6 @@ String MakeLWCFilename(String filename)
 }
 
 
-void latchanddelay(int dur) {
-    strip.show();
-    delay(dur);
-}
-
 void ClearStrip() {
     //for (int x = 0; x < stripLength; x++) {
     //    strip.setPixelColor(x, 0);
@@ -1233,7 +1236,7 @@ void ReadAndDisplayFile() {
     char num[8];
     for (int y = imgHeight; y > 0; y--) {
         // approximate time left
-        secondsLeft = (((y * 10L) / 384L) + 1L) + (y * (long)frameHold / 1000L);
+        secondsLeft = ((long)y * frameHold / 1000L);
         if (secondsLeft != lastSeconds) {
             lcd.setCursor(11, 0);
             lastSeconds = secondsLeft;
@@ -1258,7 +1261,14 @@ void ReadAndDisplayFile() {
             }
             strip.setPixelColor(x, r, b, g);
         }
-        latchanddelay(frameHold);
+        // wait for timer to expire before we show the next frame
+        while (bStripWaiting)
+            EventTimers.tick();
+        strip.show();
+        bStripWaiting = true;
+        // set a timer so we can go ahead and load the next frame
+        EventTimers.in(frameHold, StripDelay);
+        //        latchanddelay(frameHold);
         // check keys
         if (CheckCancel())
             return;
@@ -1624,7 +1634,8 @@ void BarberPole()
             }
             strip.setPixelColor(ledIx, color);
         }
-        latchanddelay(frameHold);
+        strip.show();
+        delay(frameHold);
     }
 }
 
