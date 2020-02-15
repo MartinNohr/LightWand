@@ -34,13 +34,14 @@
 
 // Library initialization
 #include <Adafruit_NeoPixel.h>           // Library for the WS2812 Neopixel Strip
-#include <SD.h>                          // Library for the SD Card
+#include <SDfat.h>                       // Library for the SD Card
 #include <LiquidCrystal.h>               // Library for the LCD Display
 #include <SPI.h>                         // Library for the SPI Interface
 #include <avr/eeprom.h>
 #include <timer.h>
 #include "LightWand.h"
 
+SdFat SD;
 // Pin assignments for the Arduino (Make changes to these if you use different Pins)
 #define BACKLIGHT 10                      // Pin used for the LCD Backlight
 #define SDcsPin 53                        // SD card CS pin
@@ -95,7 +96,7 @@ const char* menuStrings[] = {
 // Initial Variable declarations and assignments (Make changes to these if you want to change defaults)
 char signature[]{ "MLW" };                // set to make sure saved values are valid
 int stripLength = 144;                    // Set the number of LEDs the LED Strip
-int frameHold = 50;                       // default for the frame delay 
+int frameHold = 15;                       // default for the frame delay 
 int lastMenuItem = -1;                    // check to see if we need to redraw menu
 int menuItem = mFirstMenu;                // Variable for current main menu selection
 int startDelay = 0;                       // Variable for delay between button press and start of light sequence, in seconds
@@ -128,9 +129,9 @@ String sCurrentLine0;
 #define OPEN_FOLDER_CHAR '\x7e'
 #define OPEN_PARENT_FOLDER_CHAR '\x7f'
 #define MAXFOLDERS 10
-File folders[MAXFOLDERS];
+String folders[MAXFOLDERS];
 int folderLevel = 0;
-File dataFile;
+SdFile dataFile;
 String CurrentFilename = "";
 int CurrentFileIndex = 0;
 int NumberOfFiles = 0;
@@ -278,6 +279,7 @@ bool StripDelay(void*)
 // Setup loop to get everything ready.  This is only run once at power on or reset
 void setup() {
     Serial.begin(115200);
+    delay(50);
     Serial.println("Starting setup");
 
     pinMode(AuxButton, INPUT_PULLUP);
@@ -566,8 +568,8 @@ void HandleKeyLeft()
     }
     else if (menuItem == mFrameHoldTime) {
         --frameHold;
-        if (frameHold < 30) {
-            frameHold = 30;
+        if (frameHold < 15) {
+            frameHold = 15;
         }
     }
     else if (menuItem == mRepeatCount) {
@@ -680,7 +682,7 @@ bool ProcessFileOrTest(int chainnumber)
             if (first == OPEN_FOLDER_CHAR) {
                 if (folderLevel < MAXFOLDERS - 1) {
                     ++folderLevel;
-                    folders[folderLevel] = SD.open(CurrentFilename.substring(1));
+//TODO:                    folders[folderLevel] = SD.open(CurrentFilename.substring(1).c_str());
                     GetFileNamesFromSD(folders[folderLevel]);
                 }
                 else {
@@ -698,7 +700,6 @@ bool ProcessFileOrTest(int chainnumber)
                 // go back a level
                 if (folderLevel > 0) {
                     --folderLevel;
-                    folders[folderLevel] = SD.open(folders[folderLevel].name());
                     GetFileNamesFromSD(folders[folderLevel]);
                 }
                 // stop if folder
@@ -844,7 +845,7 @@ void setupSDcard() {
     lcd.clear();
     lcd.print("SD init done    ");
     delay(1000);
-    folders[folderLevel = 0] = SD.open("/");
+    folders[folderLevel = 0] = String("/");
     lcd.clear();
     lcd.print("Reading SD...   ");
     delay(500);
@@ -896,7 +897,7 @@ String GetFilePath()
 {
     String path;
     for (int ix = 0; ix <= folderLevel; ++ix) {
-        path += folders[ix].name();
+        path += folders[ix];
     }
     if (path == "/")
         return path;
@@ -913,9 +914,9 @@ void SendFile(String Filename) {
     SettingsSaveRestore(true);
     ProcessConfigFile(cfFile);
     String fn = GetFilePath() + temp;
-    dataFile = SD.open(fn);
+    dataFile.open(fn.c_str(), O_READ);
     // if the file is available send it to the LED's
-    if (dataFile) {
+    if (dataFile.available()) {
         ReadAndDisplayFile();
         dataFile.close();
     }
@@ -946,36 +947,30 @@ void DisplayCurrentFilename() {
 
 // read the files from the card
 // look for start.lwc, and process it, but don't add it to the list
-void GetFileNamesFromSD(File dir) {
+void GetFileNamesFromSD(String dir) {
     String startfile;
-    NumberOfFiles = 0;
-    CurrentFileIndex = 0;
-    String CurrentFilename = "";
-    if (strcmp(dir.name(), "/") != 0) {
-        // add an arrow to go back
-        FileNames[NumberOfFiles++] = String(OPEN_PARENT_FOLDER_CHAR) + folders[folderLevel - 1].name();
+    // Directory file.
+    SdFile root;
+    // Use for files
+    SdFile file;
+    if (!root.open("/")) {
+        Serial.println("open root failed");
     }
-    while (1) {
-        File entry = dir.openNextFile();
-        if (!entry) {
-            // no more files
-            entry.close();
-            break;
-        }
-        else {
-            if (entry.isDirectory()) {
-                CurrentFilename = entry.name();
-                CurrentFilename.toUpperCase();
-                if (!CurrentFilename.startsWith("SYSTEM\x7e")) {
-                    FileNames[NumberOfFiles] = String(OPEN_FOLDER_CHAR) + entry.name();
-                    NumberOfFiles++;
-                }
+    while (file.openNext(&root, O_RDONLY)) {
+        if (!file.isHidden()) {
+            char buf[100];
+            file.getName(buf, sizeof buf);
+            if (file.isDir()) {
+                Serial.println("dir: " + String(buf));
+                FileNames[NumberOfFiles] = String(OPEN_FOLDER_CHAR) + buf;
+                NumberOfFiles++;
             }
-            else {
-                CurrentFilename = entry.name();
-                CurrentFilename.toUpperCase();
-                if (CurrentFilename.endsWith(".BMP")) { //find files with our extension only
-                    FileNames[NumberOfFiles] = entry.name();
+            else if (file.isFile()) {
+                Serial.println("file: " + String(buf));
+                CurrentFilename = String(buf);
+                //CurrentFilename.toUpperCase();
+                if (CurrentFilename.endsWith(".BMP") || CurrentFilename.endsWith(".bmp")) { //find files with our extension only
+                    FileNames[NumberOfFiles] = CurrentFilename;
                     NumberOfFiles++;
                 }
                 else if (CurrentFilename == "START.LWC") {
@@ -983,24 +978,75 @@ void GetFileNamesFromSD(File dir) {
                 }
             }
         }
-        entry.close();
+        file.close();
     }
     isort(FileNames, NumberOfFiles);
+
+    //String startfile;
+    //NumberOfFiles = 0;
+    //CurrentFileIndex = 0;
+    //String CurrentFilename = "";
+    //char buf[100];
+    //if (dir != "\\") {
+    //    // add an arrow to go back
+    //    FileNames[NumberOfFiles++] = String(OPEN_PARENT_FOLDER_CHAR) + folders[folderLevel - 1];
+    //}
+    //while (1) {
+    //    FatFile entry(dir.c_str(), O_READ);
+    //    Serial.println("opening " + dir);
+    //    if (!entry.dirSize()) {
+    //        Serial.println("nothing there");
+    //        // no more files
+    //        entry.close();
+    //        break;
+    //    }
+    //    else {
+    //        Serial.println("got a file");
+    //        char nameBuf[100];
+    //        if (entry.isDir()) {
+    //            Serial.println("found dir");
+    //            entry.getName(nameBuf, sizeof nameBuf);
+    //            CurrentFilename = String(buf);
+    //            CurrentFilename.toUpperCase();
+    //            if (!CurrentFilename.startsWith("SYSTEM\x7e")) {
+    //                FileNames[NumberOfFiles] = String(OPEN_FOLDER_CHAR) + nameBuf;
+    //                NumberOfFiles++;
+    //            }
+    //        }
+    //        else {
+    //            entry.getName(nameBuf, sizeof nameBuf);
+    //            CurrentFilename = String(nameBuf);
+    //            CurrentFilename.toUpperCase();
+    //            Serial.println("found file" + CurrentFilename);
+    //            if (CurrentFilename.endsWith(".BMP")) { //find files with our extension only
+    //                FileNames[NumberOfFiles] = String(nameBuf);
+    //                NumberOfFiles++;
+    //            }
+    //            else if (CurrentFilename == "START.LWC") {
+    //                startfile = CurrentFilename;
+    //            }
+    //        }
+    //    }
+    //    if (!entry.openNext(&entry))
+    //        break;
+    //}
+    //isort(FileNames, NumberOfFiles);
     // see if we need to process the auto start file
-    if (startfile.length())
-        ProcessConfigFile(startfile);
+    //if (startfile.length())
+    //    ProcessConfigFile(startfile);
 }
 
 // process the lines in the config file
 bool ProcessConfigFile(String filename)
 {
     bool retval = true;
-    SDLib::File file;
     String filepath = GetFilePath() + filename;
-    file = SD.open(filepath);
-    if (file) {
+    SdFile rdfile(filepath.c_str(), O_RDONLY);
+    if (rdfile.available()) {
         String line, command, args;
-        while ((line = file.readStringUntil('\n')), line.length()) {
+        char buf[100];
+        while (rdfile.fgets(buf, sizeof buf, "\n")) {
+            line = String(buf);
             // read the lines and do what they say
             int ix = line.indexOf('=', 0);
             if (ix > 0) {
@@ -1043,16 +1089,15 @@ bool ProcessConfigFile(String filename)
 bool WriteOrDeleteConfigFile(String filename, bool remove)
 {
     bool retval = true;
-    SDLib::File file;
     String name = MakeLWCFilename(filename);
     String filepath = GetFilePath() + name;
     if (remove) {
-        SD.remove(filepath);
+        SD.remove(filepath.c_str());
     }
     else {
-        file = SD.open(filepath, O_READ | O_WRITE | O_CREAT | O_TRUNC);
+        SdFile file(filepath.c_str(), O_READ | O_WRITE | O_CREAT | O_TRUNC);
         String line;
-        if (file) {
+        if (file.availableForWrite()) {
             line = "PIXELS=" + String(stripLength);
             file.println(line);
             line = "BRIGHTNESS=" + String(nStripBrightness);
@@ -1083,9 +1128,6 @@ String MakeLWCFilename(String filename)
 
 
 void ClearStrip() {
-    //for (int x = 0; x < stripLength; x++) {
-    //    strip.setPixelColor(x, 0);
-    //}
     strip.clear();
     strip.show();
 }
@@ -1095,16 +1137,16 @@ uint32_t readLong() {
     uint32_t retValue;
     byte incomingbyte;
 
-    incomingbyte = readByte();
+    incomingbyte = readByte(false);
     retValue = (uint32_t)((byte)incomingbyte);
 
-    incomingbyte = readByte();
+    incomingbyte = readByte(false);
     retValue += (uint32_t)((byte)incomingbyte) << 8;
 
-    incomingbyte = readByte();
+    incomingbyte = readByte(false);
     retValue += (uint32_t)((byte)incomingbyte) << 16;
 
-    incomingbyte = readByte();
+    incomingbyte = readByte(false);
     retValue += (uint32_t)((byte)incomingbyte) << 24;
 
     return retValue;
@@ -1116,29 +1158,42 @@ uint16_t readInt() {
     byte incomingbyte;
     uint16_t retValue;
 
-    incomingbyte = readByte();
+    incomingbyte = readByte(false);
     retValue += (uint16_t)((byte)incomingbyte);
 
-    incomingbyte = readByte();
+    incomingbyte = readByte(false);
     retValue += (uint16_t)((byte)incomingbyte) << 8;
 
     return retValue;
 }
 
+byte filebuf[512];
+int fileindex = 0;
+int filebufsize = 0;
 
-
-int readByte() {
-    int retbyte = -1;
-    while (retbyte < 0) 
-        retbyte = dataFile.read();
-    return retbyte;
+int readByte(bool clear) {
+    //int retbyte = -1;
+    if (clear) {
+        filebufsize = 0;
+        fileindex = 0;
+        return 0;
+    }
+    if (filebufsize == 0 || fileindex >= sizeof filebuf) {
+        // read a block
+        filebufsize = dataFile.read(filebuf, sizeof filebuf);
+        fileindex = 0;
+    }
+    return filebuf[fileindex++];
+    //while (retbyte < 0) 
+    //    retbyte = dataFile.read();
+    //return retbyte;
 }
 
 
 void getRGBwithGamma() {
-    g = strip.gamma8(readByte()) / (101 - nStripBrightness);
-    b = strip.gamma8(readByte()) / (101 - nStripBrightness);
-    r = strip.gamma8(readByte()) / (101 - nStripBrightness);
+    g = strip.gamma8(readByte(false)) / (101 - nStripBrightness);
+    b = strip.gamma8(readByte(false)) / (101 - nStripBrightness);
+    r = strip.gamma8(readByte(false)) / (101 - nStripBrightness);
     //g = gamma(readByte()) / (101 - nStripBrightness);
     //b = gamma(readByte()) / (101 - nStripBrightness);
     //r = gamma(readByte()) / (101 - nStripBrightness);
@@ -1217,7 +1272,6 @@ void ReadAndDisplayFile() {
     if ((lineLength % 4) != 0)
         lineLength = (lineLength / 4 + 1) * 4;
 
-    
     // Note:  
     // The x,r,b,g sequence below might need to be changed if your strip is displaying
     // incorrect colors.  Some strips use an x,r,b,g sequence and some use x,r,g,b
@@ -1244,7 +1298,7 @@ void ReadAndDisplayFile() {
         //dataFile.seek(offset);
         for (int x = 0; x < displayWidth; x++) {
             // moved this back here because it might make it possible to reverse scan in the future
-            dataFile.seek((uint32_t)MYBMP_BF_OFF_BITS + (((y - 1) * lineLength) + (x * 3)));
+            dataFile.seekSet((uint32_t)MYBMP_BF_OFF_BITS + (((y - 1) * lineLength) + (x * 3)));
             getRGBwithGamma();
             // see if we want this one
             if (bScaleHeight && (x * displayWidth) % imgWidth) {
@@ -1261,8 +1315,9 @@ void ReadAndDisplayFile() {
         EventTimers.in(frameHold, StripDelay);
         // check keys
         if (CheckCancel())
-            return;
+            break;
     }
+    readByte(true);
 }
 
 // see if they want to cancel
@@ -1811,5 +1866,5 @@ void fadeToBlack(int ledNo, byte fadeValue) {
 #ifndef ADAFRUIT_NEOPIXEL_H
     // FastLED
     leds[ledNo].fadeToBlackBy(fadeValue);
-#endif  
+#endif
 }
