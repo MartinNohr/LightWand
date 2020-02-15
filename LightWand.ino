@@ -75,7 +75,7 @@ enum e_menuitem {
     MAXMENU
 };
 const char* menuStrings[] = {
-    "File",
+    "#",            // file, keep short to show folder name
     "Frame Time",
     "Brightness",
     "Repeat Count",
@@ -284,7 +284,7 @@ void setup() {
     Serial.println("Starting setup");
 
     pinMode(AuxButton, INPUT_PULLUP);
-
+    folders[folderLevel = 0] = String("/");
     setupLEDs();
     setupLCDdisplay();
     setupSDcard();
@@ -316,7 +316,7 @@ void loop() {
         lcd.write((byte)0);
         lcd.print(menuStrings[menuItem]);
         if (menuItem == mSelectFile) {
-            lcd.print(" " + String(CurrentFileIndex + 1) + "/" + String(NumberOfFiles));
+            lcd.print(String(CurrentFileIndex + 1) + "/" + String(NumberOfFiles) + " " + folders[folderLevel]);
         }
         if (menuItem == mTestPatterns) {
             lcd.print(" " + String(nTestNumber + 1) + "/" + String(MAXTEST));
@@ -682,8 +682,7 @@ bool ProcessFileOrTest(int chainnumber)
             // first see if a folder
             if (first == OPEN_FOLDER_CHAR) {
                 if (folderLevel < MAXFOLDERS - 1) {
-                    ++folderLevel;
-//TODO:                    folders[folderLevel] = SD.open(CurrentFilename.substring(1).c_str());
+                    folders[++folderLevel] = CurrentFilename.substring(1);
                     GetFileNamesFromSD(folders[folderLevel]);
                 }
                 else {
@@ -700,8 +699,7 @@ bool ProcessFileOrTest(int chainnumber)
             else if (first == OPEN_PARENT_FOLDER_CHAR) {
                 // go back a level
                 if (folderLevel > 0) {
-                    --folderLevel;
-                    GetFileNamesFromSD(folders[folderLevel]);
+                    GetFileNamesFromSD(folders[--folderLevel]);
                 }
                 // stop if folder
                 bFolderChanged = true;
@@ -826,7 +824,7 @@ void setupLEDs() {
 
 void setupLCDdisplay() {
     lcd.begin(16, 2);
-    lcd.print("LightWand V4.2");
+    lcd.print("LightWand V5.0");
     lcd.setCursor(0, 1);
     lcd.print("Initializing...");
     delay(2000);
@@ -948,93 +946,55 @@ void DisplayCurrentFilename() {
 
 // read the files from the card
 // look for start.lwc, and process it, but don't add it to the list
-void GetFileNamesFromSD(String dir) {
+bool GetFileNamesFromSD(String dir) {
     String startfile;
     // Directory file.
     SdFile root;
     // Use for files
     SdFile file;
-    if (!root.open("/")) {
-        Serial.println("open root failed");
+    // start over
+    NumberOfFiles = 0;
+    CurrentFileIndex = 0;
+    String CurrentFilename = "";
+
+    if (!root.open(dir.c_str())) {
+        Serial.println("open failed: " + dir);
+        return false;
+    }
+    if (dir != "/") {
+        // add an arrow to go back
+        FileNames[NumberOfFiles++] = String(OPEN_PARENT_FOLDER_CHAR) + folders[folderLevel - 1];
     }
     while (file.openNext(&root, O_RDONLY)) {
         if (!file.isHidden()) {
             char buf[100];
             file.getName(buf, sizeof buf);
             if (file.isDir()) {
-                Serial.println("dir: " + String(buf));
                 FileNames[NumberOfFiles] = String(OPEN_FOLDER_CHAR) + buf;
                 NumberOfFiles++;
             }
             else if (file.isFile()) {
-                Serial.println("file: " + String(buf));
                 CurrentFilename = String(buf);
-                //CurrentFilename.toUpperCase();
-                if (CurrentFilename.endsWith(".BMP") || CurrentFilename.endsWith(".bmp")) { //find files with our extension only
+                String uppername = CurrentFilename;
+                uppername.toUpperCase();
+                if (uppername.endsWith(".BMP")) { //find files with our extension only
                     FileNames[NumberOfFiles] = CurrentFilename;
                     NumberOfFiles++;
                 }
-                else if (CurrentFilename == "START.LWC") {
+                else if (uppername == "START.LWC") {
                     startfile = CurrentFilename;
                 }
             }
         }
         file.close();
     }
+    root.close();
+    delay(500);
     isort(FileNames, NumberOfFiles);
-
-    //String startfile;
-    //NumberOfFiles = 0;
-    //CurrentFileIndex = 0;
-    //String CurrentFilename = "";
-    //char buf[100];
-    //if (dir != "\\") {
-    //    // add an arrow to go back
-    //    FileNames[NumberOfFiles++] = String(OPEN_PARENT_FOLDER_CHAR) + folders[folderLevel - 1];
-    //}
-    //while (1) {
-    //    FatFile entry(dir.c_str(), O_READ);
-    //    Serial.println("opening " + dir);
-    //    if (!entry.dirSize()) {
-    //        Serial.println("nothing there");
-    //        // no more files
-    //        entry.close();
-    //        break;
-    //    }
-    //    else {
-    //        Serial.println("got a file");
-    //        char nameBuf[100];
-    //        if (entry.isDir()) {
-    //            Serial.println("found dir");
-    //            entry.getName(nameBuf, sizeof nameBuf);
-    //            CurrentFilename = String(buf);
-    //            CurrentFilename.toUpperCase();
-    //            if (!CurrentFilename.startsWith("SYSTEM\x7e")) {
-    //                FileNames[NumberOfFiles] = String(OPEN_FOLDER_CHAR) + nameBuf;
-    //                NumberOfFiles++;
-    //            }
-    //        }
-    //        else {
-    //            entry.getName(nameBuf, sizeof nameBuf);
-    //            CurrentFilename = String(nameBuf);
-    //            CurrentFilename.toUpperCase();
-    //            Serial.println("found file" + CurrentFilename);
-    //            if (CurrentFilename.endsWith(".BMP")) { //find files with our extension only
-    //                FileNames[NumberOfFiles] = String(nameBuf);
-    //                NumberOfFiles++;
-    //            }
-    //            else if (CurrentFilename == "START.LWC") {
-    //                startfile = CurrentFilename;
-    //            }
-    //        }
-    //    }
-    //    if (!entry.openNext(&entry))
-    //        break;
-    //}
-    //isort(FileNames, NumberOfFiles);
     // see if we need to process the auto start file
-    //if (startfile.length())
-    //    ProcessConfigFile(startfile);
+    if (startfile.length())
+        ProcessConfigFile(startfile);
+    return true;
 }
 
 // process the lines in the config file
