@@ -30,6 +30,7 @@
   21 bit coloring.
 
   Feb 2020: Extensive rewrites and added features by Martin Nohr
+  Switched over to SDFAT, reading is over twice as fast!
 */
 
 // Library initialization
@@ -1170,6 +1171,7 @@ uint16_t readInt() {
 byte filebuf[512];
 int fileindex = 0;
 int filebufsize = 0;
+uint32_t filePosition = 0;
 
 int readByte(bool clear) {
     //int retbyte = -1;
@@ -1178,8 +1180,16 @@ int readByte(bool clear) {
         fileindex = 0;
         return 0;
     }
+    // TODO: this needs to align with 512 byte boundaries
     if (filebufsize == 0 || fileindex >= sizeof filebuf) {
+        filePosition = dataFile.curPosition();
+        //// if not on 512 boundary yet, just return a byte
+        //if ((filePosition % 512) && filebufsize == 0) {
+        //    //Serial.println("not on 512");
+        //    return dataFile.read();
+        //}
         // read a block
+//        Serial.println("block read");
         filebufsize = dataFile.read(filebuf, sizeof filebuf);
         fileindex = 0;
     }
@@ -1189,6 +1199,15 @@ int readByte(bool clear) {
     //return retbyte;
 }
 
+// make sure we are the right place
+uint32_t FileSeek(uint32_t place)
+{
+    if (place < filePosition || place >= filePosition + filebufsize) {
+        // we need to read some more
+        filebufsize = 0;
+        dataFile.seekSet(place);
+    }
+}
 
 void getRGBwithGamma() {
     g = strip.gamma8(readByte(false)) / (101 - nStripBrightness);
@@ -1264,8 +1283,7 @@ void ReadAndDisplayFile() {
     if (imgWidth > stripLength) {
         displayWidth = stripLength;           //only display the number of led's we have
     }
-
-
+    
     /* compute the line length */
     uint32_t lineLength = imgWidth * 3;
     // fix for padding to 4 byte words
@@ -1281,7 +1299,7 @@ void ReadAndDisplayFile() {
     char num[8];
     for (int y = imgHeight; y > 0; y--) {
         // approximate time left
-        secondsLeft = ((long)y * frameHold / 1000L);
+        secondsLeft = ((long)y * frameHold / 1000L) + 1;
         if (secondsLeft != lastSeconds) {
             lcd.setCursor(11, 0);
             lastSeconds = secondsLeft;
@@ -1295,10 +1313,11 @@ void ReadAndDisplayFile() {
         }
         int bufpos = 0;
         //uint32_t offset = (MYBMP_BF_OFF_BITS + ((y - 1) * lineLength));
-        //dataFile.seek(offset);
+        //dataFile.seekSet(offset);
         for (int x = 0; x < displayWidth; x++) {
             // moved this back here because it might make it possible to reverse scan in the future
-            dataFile.seekSet((uint32_t)MYBMP_BF_OFF_BITS + (((y - 1) * lineLength) + (x * 3)));
+            FileSeek((uint32_t)MYBMP_BF_OFF_BITS + (((y - 1) * lineLength) + (x * 3)));
+            //dataFile.seekSet((uint32_t)MYBMP_BF_OFF_BITS + (((y - 1) * lineLength) + (x * 3)));
             getRGBwithGamma();
             // see if we want this one
             if (bScaleHeight && (x * displayWidth) % imgWidth) {
