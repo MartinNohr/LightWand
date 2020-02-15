@@ -98,7 +98,7 @@ int stripLength = 144;                    // Set the number of LEDs the LED Stri
 int frameHold = 50;                       // default for the frame delay 
 int lastMenuItem = -1;                    // check to see if we need to redraw menu
 int menuItem = mFirstMenu;                // Variable for current main menu selection
-int startDelay = 0;                        // Variable for delay between button press and start of light sequence, in seconds
+int startDelay = 0;                       // Variable for delay between button press and start of light sequence, in seconds
 int repeat = 0;                           // Variable to select auto repeat (until select button is pressed again)
 int repeatDelay = 0;                      // Variable for delay between repeats
 int repeatCount = 1;                      // Variable to keep track of number of repeats
@@ -328,13 +328,7 @@ void loop() {
             break;
         case mStripBrightness:
             lcd.print(nStripBrightness);
-            if (nStripBrightness == 100) {
-                lcd.setCursor(3, 1);
-            }
-            else {
-                lcd.setCursor(2, 1);
-            }
-            lcd.print("%");
+            lcd.print(" %  ");
             break;
         case mInitDelay:
             lcd.print(String(startDelay) + " Seconds");
@@ -430,11 +424,11 @@ void loop() {
         }
         // calcualate how long to wait
         unsigned long now = millis();
-        if (now > startKeyDown + 3000)
+        if (now > startKeyDown + 4000)
             kbdWaitTime = KEYWAITPAUSE / 5;
         if (now > startKeyDown + 6000)
             kbdWaitTime = KEYWAITPAUSE / 10;
-        if (now > startKeyDown + 10000)
+        if (now > startKeyDown + 8000)
             kbdWaitTime = KEYWAITPAUSE / 20;
         // do the prescribed wait
         delay(kbdWaitTime);
@@ -495,9 +489,7 @@ void HandleKeyRight()
     }
     else if (menuItem == mStripBrightness) {
         if (nStripBrightness < 100) {
-            if (nStripBrightness == 1)
-                nStripBrightness = 0;
-            nStripBrightness += 5;
+            ++nStripBrightness;
         }
     }
     else if (menuItem == mInitDelay) {
@@ -564,9 +556,7 @@ void HandleKeyLeft()
     }
     else if (menuItem == mStripBrightness) {
         if (nStripBrightness > 1) {
-            nStripBrightness -= 5;
-            if (nStripBrightness <= 0)
-                nStripBrightness = 1;
+            --nStripBrightness;
         }
     }
     else if (menuItem == mInitDelay) {
@@ -1139,7 +1129,8 @@ uint16_t readInt() {
 
 int readByte() {
     int retbyte = -1;
-    while (retbyte < 0) retbyte = dataFile.read();
+    while (retbyte < 0) 
+        retbyte = dataFile.read();
     return retbyte;
 }
 
@@ -1268,7 +1259,6 @@ void ReadAndDisplayFile() {
         bStripWaiting = true;
         // set a timer so we can go ahead and load the next frame
         EventTimers.in(frameHold, StripDelay);
-        //        latchanddelay(frameHold);
         // check keys
         if (CheckCancel())
             return;
