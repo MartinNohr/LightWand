@@ -669,7 +669,7 @@ bool ProcessFileOrTest(int chainnumber)
         // only display if a file
         char first = CurrentFilename[0];
         if (first != OPEN_FOLDER_CHAR && first != OPEN_PARENT_FOLDER_CHAR) {
-            sprintf(line, "Repeat %d", counter);
+            sprintf(line, "Count %d", counter);
             lcd.print(line);
             // save this for restoring if cancel is cancelled
             sCurrentLine0 = line;
