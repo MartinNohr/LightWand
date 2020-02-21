@@ -785,7 +785,7 @@ void SaveSettings(bool save, bool autoload)
             }
             eeprom_read_block(saveValueList[ix].val, blockpointer, saveValueList[ix].size);
             // if autoload, exit if the save value is not true
-            if (autoload && ix == 0) {
+            if (autoload && ix == 1) {
                 if (!bAutoLoadSettings) {
                     return;
                 }
@@ -824,7 +824,7 @@ void setupLEDs() {
 
 void setupLCDdisplay() {
     lcd.begin(16, 2);
-    lcd.print("LightWand V5.0");
+    lcd.print("LightWand V5.1");
     lcd.setCursor(0, 1);
     lcd.print("Initializing...");
     delay(2000);
