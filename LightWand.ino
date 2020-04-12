@@ -98,6 +98,12 @@ const uint8_t PROGMEM gammaB[] = {
   139,141,143,144,146,148,150,152,153,155,157,159,161,163,165,167,
   169,171,173,175,177,179,181,183,185,187,189,191,193,196,198,200 };
 
+// white balance values, really only 8 bits, but menus need 16 for ints
+struct {
+    uint16_t r;
+    uint16_t g;
+    uint16_t b;
+} whiteBalance = { 255,255,255 };
 
 #define DATA_PIN 31
 #define NUM_LEDS 288
@@ -355,7 +361,7 @@ void setup() {
     digitalWrite(LED_BUILTIN, HIGH);
     SaveSettings(false, true);
     FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, stripLength);
-    //FastLED.setTemperature(CRGB(whiteBalance.r, whiteBalance.g, whiteBalance.b));
+    FastLED.setTemperature(CRGB(whiteBalance.r, whiteBalance.g, whiteBalance.b));
     FastLED.setBrightness(map(nStripBrightness, 0, 100, 0, 255));
     // Turn the LED on, then pause
     leds[0] = leds[1] = CRGB::Red;
@@ -1382,7 +1388,7 @@ void ReadAndDisplayFile() {
             if (bScaleHeight && (x * displayWidth) % imgWidth) {
                 continue;
             }
-            leds[x] = CRGB(r, b, g);
+            leds[x] = CRGB(r, g, b);
         }
         // wait for timer to expire before we show the next frame
         while (bStripWaiting)
