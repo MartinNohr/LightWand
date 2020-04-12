@@ -1288,10 +1288,10 @@ void ReadAndDisplayFile() {
         // wait for timer to expire before we show the next frame
         while (bStripWaiting)
             EventTimers.tick();
-        strip.show();
         bStripWaiting = true;
         // set a timer so we can go ahead and load the next frame
         EventTimers.in(frameHold, StripDelay);
+        strip.show();
         // check keys
         if (CheckCancel())
             break;
