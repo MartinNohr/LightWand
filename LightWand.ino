@@ -34,7 +34,7 @@
 */
 
 // Library initialization
-#include <Adafruit_NeoPixel.h>           // Library for the WS2812 Neopixel Strip
+#include <FastLED.h>                     // Library for the WS2812 Neopixel Strip
 #include <SDfat.h>                       // Library for the SD Card
 #include <LiquidCrystal.h>               // Library for the LCD Display
 #include <SPI.h>                         // Library for the SPI Interface
@@ -42,11 +42,77 @@
 #include <timer.h>
 #include "LightWand.h"
 
+// Gramma Correction (Defalt Gamma = 2.8)
+const uint8_t PROGMEM gammaR[] = {
+    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  1,  1,
+    1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  2,  2,  2,  2,  2,
+    2,  2,  2,  3,  3,  3,  3,  3,  3,  3,  4,  4,  4,  4,  4,  5,
+    5,  5,  5,  5,  6,  6,  6,  6,  7,  7,  7,  7,  8,  8,  8,  9,
+    9,  9, 10, 10, 10, 11, 11, 11, 12, 12, 12, 13, 13, 14, 14, 14,
+   15, 15, 16, 16, 17, 17, 18, 18, 19, 19, 20, 20, 21, 21, 22, 22,
+   23, 24, 24, 25, 25, 26, 27, 27, 28, 29, 29, 30, 31, 31, 32, 33,
+   33, 34, 35, 36, 36, 37, 38, 39, 40, 40, 41, 42, 43, 44, 45, 46,
+   46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61,
+   62, 63, 65, 66, 67, 68, 69, 70, 71, 73, 74, 75, 76, 78, 79, 80,
+   81, 83, 84, 85, 87, 88, 89, 91, 92, 94, 95, 97, 98, 99,101,102,
+  104,105,107,109,110,112,113,115,116,118,120,121,123,125,127,128,
+  130,132,134,135,137,139,141,143,145,146,148,150,152,154,156,158,
+  160,162,164,166,168,170,172,174,177,179,181,183,185,187,190,192,
+  194,196,199,201,203,206,208,210,213,215,218,220,223,225,227,230 };
+
+const uint8_t PROGMEM gammaG[] = {
+    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  1,  1,  1,
+    1,  1,  1,  1,  1,  1,  1,  1,  1,  2,  2,  2,  2,  2,  2,  2,
+    2,  3,  3,  3,  3,  3,  3,  3,  4,  4,  4,  4,  4,  5,  5,  5,
+    5,  6,  6,  6,  6,  7,  7,  7,  7,  8,  8,  8,  9,  9,  9, 10,
+   10, 10, 11, 11, 11, 12, 12, 13, 13, 13, 14, 14, 15, 15, 16, 16,
+   17, 17, 18, 18, 19, 19, 20, 20, 21, 21, 22, 22, 23, 24, 24, 25,
+   25, 26, 27, 27, 28, 29, 29, 30, 31, 32, 32, 33, 34, 35, 35, 36,
+   37, 38, 39, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 50,
+   51, 52, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 66, 67, 68,
+   69, 70, 72, 73, 74, 75, 77, 78, 79, 81, 82, 83, 85, 86, 87, 89,
+   90, 92, 93, 95, 96, 98, 99,101,102,104,105,107,109,110,112,114,
+  115,117,119,120,122,124,126,127,129,131,133,135,137,138,140,142,
+  144,146,148,150,152,154,156,158,160,162,164,167,169,171,173,175,
+  177,180,182,184,186,189,191,193,196,198,200,203,205,208,210,213,
+  215,218,220,223,225,228,231,233,236,239,241,244,247,249,252,255 };
+
+
+const uint8_t PROGMEM gammaB[] = {
+    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,
+    1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  2,  2,  2,
+    2,  2,  2,  2,  2,  2,  3,  3,  3,  3,  3,  3,  3,  4,  4,  4,
+    4,  4,  5,  5,  5,  5,  5,  6,  6,  6,  6,  6,  7,  7,  7,  8,
+    8,  8,  8,  9,  9,  9, 10, 10, 10, 10, 11, 11, 12, 12, 12, 13,
+   13, 13, 14, 14, 15, 15, 15, 16, 16, 17, 17, 18, 18, 19, 19, 19,
+   20, 20, 21, 22, 22, 23, 23, 24, 24, 25, 25, 26, 27, 27, 28, 28,
+   29, 30, 30, 31, 32, 32, 33, 34, 34, 35, 36, 37, 37, 38, 39, 40,
+   40, 41, 42, 43, 44, 44, 45, 46, 47, 48, 49, 50, 51, 51, 52, 53,
+   54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 69, 70,
+   71, 72, 73, 74, 75, 77, 78, 79, 80, 81, 83, 84, 85, 86, 88, 89,
+   90, 92, 93, 94, 96, 97, 98,100,101,103,104,106,107,109,110,112,
+  113,115,116,118,119,121,122,124,126,127,129,131,132,134,136,137,
+  139,141,143,144,146,148,150,152,153,155,157,159,161,163,165,167,
+  169,171,173,175,177,179,181,183,185,187,189,191,193,196,198,200 };
+
+
+#define DATA_PIN 31
+#define NUM_LEDS 288
+
+// functions
+bool CheckCancel();
+
+// Define the array of leds
+CRGB leds[NUM_LEDS * 2];
+
 SdFat SD;
 // Pin assignments for the Arduino (Make changes to these if you use different Pins)
 #define BACKLIGHT 10                      // Pin used for the LCD Backlight
 #define SDcsPin 53                        // SD card CS pin
-int NPPin = 31;                           // Data Pin for the NeoPixel LED Strip
+//int NPPin = 31;                           // Data Pin for the NeoPixel LED Strip
 int AuxButton = 35;                       // Aux Select Button Pin
 int g = 0;                                // Variable for the Green Value
 int b = 0;                                // Variable for the Blue Value
@@ -104,7 +170,7 @@ int startDelay = 0;                       // Variable for delay between button p
 int repeat = 0;                           // Variable to select auto repeat (until select button is pressed again)
 int repeatDelay = 0;                      // Variable for delay between repeats
 int repeatCount = 1;                      // Variable to keep track of number of repeats
-int nStripBrightness = 50;                // Variable and default for the Brightness of the strip
+int nStripBrightness = 10;                // Variable and default for the Brightness of the strip
 bool bGammaCorrection = true;             // set to use the gamma table
 bool bAutoLoadSettings = false;           // set to automatically load saved settings
 bool bScaleHeight = false;                // scale the Y values to fit the number of pixels
@@ -113,9 +179,6 @@ bool bChainFiles = false;            // set to run all the files from current to
 
 // Other program variable declarations, assignments, and initializations
 LiquidCrystal lcd(8, 9, 4, 5, 6, 7);      // Init the LCD
-
-// Declaring the two LED Strips and pin assignments to each 
-Adafruit_NeoPixel strip = Adafruit_NeoPixel(stripLength, NPPin, NEO_GRB + NEO_KHZ800);
 
 // Variable assignments for the Keypad
 int adc_key_val[5] = { 30, 170, 390, 600, 800 };
@@ -291,6 +354,41 @@ void setup() {
     // turn on the keyboard reader
     digitalWrite(LED_BUILTIN, HIGH);
     SaveSettings(false, true);
+    FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, stripLength);
+    //FastLED.setTemperature(CRGB(whiteBalance.r, whiteBalance.g, whiteBalance.b));
+    FastLED.setBrightness(map(nStripBrightness, 0, 100, 0, 255));
+    // Turn the LED on, then pause
+    leds[0] = leds[1] = CRGB::Red;
+    leds[4] = leds[5] = CRGB::Green;
+    leds[8] = leds[9] = CRGB::Blue;
+    leds[12] = leds[13] = CRGB::White;
+    for (int ix = 0; ix < 255; ix += 5) {
+        FastLED.setBrightness(ix);
+        FastLED.show();
+    }
+    for (int ix = 255; ix >= 0; ix -= 5) {
+        FastLED.setBrightness(ix);
+        FastLED.show();
+    }
+    // Now turn the LED off
+    FastLED.clear(true);
+    // run a white dot up the display and back
+    FastLED.setBrightness(map(nStripBrightness, 0, 100, 0, 255));
+    for (int ix = 0; ix < stripLength; ++ix) {
+        leds[ix] = CRGB(255, 255, 255);
+        if (ix)
+            leds[ix - 1] = CRGB::Black;
+        FastLED.show();
+        delay(1);
+    }
+    for (int ix = stripLength - 1; ix >= 0; --ix) {
+        leds[ix] = CRGB(255, 255, 255);
+        if (ix)
+            leds[ix + 1] = CRGB::Black;
+        FastLED.show();
+        delay(1);
+    }
+    FastLED.clear(true);
     EventTimers.every(1000 / TIMERSTEPS, BackLightControl);
     Serial.println("Finishing setup");
 }
@@ -493,6 +591,7 @@ void HandleKeyRight()
     else if (menuItem == mStripBrightness) {
         if (nStripBrightness < 100) {
             ++nStripBrightness;
+            FastLED.setBrightness(map(nStripBrightness, 0, 100, 0, 255));
         }
     }
     else if (menuItem == mInitDelay) {
@@ -526,7 +625,7 @@ void HandleKeyRight()
         bGammaCorrection = !bGammaCorrection;
     }
     else if (menuItem == mStripLength) {
-        strip.updateLength(++stripLength);
+        FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, ++stripLength);
     }
     else if (menuItem == mScaleHeight) {
         bScaleHeight = !bScaleHeight;
@@ -560,6 +659,7 @@ void HandleKeyLeft()
     else if (menuItem == mStripBrightness) {
         if (nStripBrightness > 1) {
             --nStripBrightness;
+            FastLED.setBrightness(map(nStripBrightness, 0, 100, 0, 255));
         }
     }
     else if (menuItem == mInitDelay) {
@@ -605,7 +705,7 @@ void HandleKeyLeft()
     }
     else if (menuItem == mStripLength) {
         if (stripLength > 1)
-            strip.updateLength(--stripLength);
+            FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, --stripLength);
     }
     else if (menuItem == mScaleHeight) {
         bScaleHeight = !bScaleHeight;
@@ -718,14 +818,12 @@ bool ProcessFileOrTest(int chainnumber)
             lcd.setCursor(0, 0);
             lcd.print("Repeat delay...");
             if (repeatDelay) {
-                strip.clear();
-                strip.show();
+                FastLED.clear(true);
                 delay(repeatDelay);
             }
         }
     }
-    strip.clear();
-    strip.show();
+    FastLED.clear(true);
 }
 
 // save or restore all the settings that are relevant
@@ -817,14 +915,13 @@ void SaveSettings(bool save, bool autoload)
 
 
 void setupLEDs() {
-    strip.begin();
-    strip.show();
+    FastLED.clear(true);
 }
 
 
 void setupLCDdisplay() {
     lcd.begin(16, 2);
-    lcd.print("LightWand V5.1");
+    lcd.print("LightWand V5.2");
     lcd.setCursor(0, 1);
     lcd.print("Initializing...");
     delay(2000);
@@ -1017,7 +1114,7 @@ bool ProcessConfigFile(String filename)
                 args = line.substring(ix + 1);
                 if (!command.compareTo("PIXELS")) {
                     stripLength = args.toInt();
-                    strip.updateLength(stripLength);
+                    FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, stripLength);
                 }
                 else if (command == "BRIGHTNESS") {
                     nStripBrightness = args.toInt();
@@ -1025,6 +1122,7 @@ bool ProcessConfigFile(String filename)
                         nStripBrightness = 1;
                     else if (nStripBrightness > 100)
                         nStripBrightness = 100;
+                    FastLED.setBrightness(map(nStripBrightness, 0, 100, 0, 255));
                 }
                 else if (command == "REPEAT COUNT") {
                     repeatCount = args.toInt();
@@ -1089,8 +1187,7 @@ String MakeLWCFilename(String filename)
 
 
 void ClearStrip() {
-    strip.clear();
-    strip.show();
+    FastLED.clear(true);
 }
 
 
@@ -1170,23 +1267,25 @@ uint32_t FileSeek(uint32_t place)
 }
 
 void getRGBwithGamma() {
-    g = strip.gamma8(readByte(false)) / (101 - nStripBrightness);
-    b = strip.gamma8(readByte(false)) / (101 - nStripBrightness);
-    r = strip.gamma8(readByte(false)) / (101 - nStripBrightness);
-    //g = gamma(readByte()) / (101 - nStripBrightness);
-    //b = gamma(readByte()) / (101 - nStripBrightness);
-    //r = gamma(readByte()) / (101 - nStripBrightness);
+    if (bGammaCorrection) {
+        b = pgm_read_byte(&gammaB[readByte(false)]);
+        g = pgm_read_byte(&gammaG[readByte(false)]);
+        r = pgm_read_byte(&gammaR[readByte(false)]);
+    }
+    else {
+        b = readByte(false);
+        g = readByte(false);
+        r = readByte(false);
+    }
 }
 
 void fixRGBwithGamma(byte* rp, byte* gp, byte* bp) {
-    *gp = strip.gamma8(*gp) / (101 - nStripBrightness);
-    *bp = strip.gamma8(*bp) / (101 - nStripBrightness);
-    *rp = strip.gamma8(*rp) / (101 - nStripBrightness);
-    //*gp = gamma(*gp) / (101 - nStripBrightness);
-    //*bp = gamma(*bp) / (101 - nStripBrightness);
-    //*rp = gamma(*rp) / (101 - nStripBrightness);
+    if (bGammaCorrection) {
+        *gp = pgm_read_byte(&gammaG[*gp]);
+        *bp = pgm_read_byte(&gammaB[*bp]);
+        *rp = pgm_read_byte(&gammaR[*rp]);
+    }
 }
-
 
 void ReadAndDisplayFile() {
 #define MYBMP_BF_TYPE           0x4D42
@@ -1283,7 +1382,7 @@ void ReadAndDisplayFile() {
             if (bScaleHeight && (x * displayWidth) % imgWidth) {
                 continue;
             }
-            strip.setPixelColor(x, r, b, g);
+            leds[x] = CRGB(r, b, g);
         }
         // wait for timer to expire before we show the next frame
         while (bStripWaiting)
@@ -1291,7 +1390,7 @@ void ReadAndDisplayFile() {
         bStripWaiting = true;
         // set a timer so we can go ahead and load the next frame
         EventTimers.in(frameHold, StripDelay);
-        strip.show();
+        FastLED.show();
         // check keys
         if (CheckCancel())
             break;
@@ -1356,32 +1455,6 @@ void isort(String* filenames, int n) {
     }
 }
 
-
-
-PROGMEM const unsigned char gammaTable[] = {
-  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  1,  1,  1,
-  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  2,  2,  2,  2,
-  2,  2,  2,  2,  2,  3,  3,  3,  3,  3,  3,  3,  3,  4,  4,  4,
-  4,  4,  4,  4,  5,  5,  5,  5,  5,  6,  6,  6,  6,  6,  7,  7,
-  7,  7,  7,  8,  8,  8,  8,  9,  9,  9,  9, 10, 10, 10, 10, 11,
-  11, 11, 12, 12, 12, 13, 13, 13, 13, 14, 14, 14, 15, 15, 16, 16,
-  16, 17, 17, 17, 18, 18, 18, 19, 19, 20, 20, 21, 21, 21, 22, 22,
-  23, 23, 24, 24, 24, 25, 25, 26, 26, 27, 27, 28, 28, 29, 29, 30,
-  30, 31, 32, 32, 33, 33, 34, 34, 35, 35, 36, 37, 37, 38, 38, 39,
-  40, 40, 41, 41, 42, 43, 43, 44, 45, 45, 46, 47, 47, 48, 49, 50,
-  50, 51, 52, 52, 53, 54, 55, 55, 56, 57, 58, 58, 59, 60, 61, 62,
-  62, 63, 64, 65, 66, 67, 67, 68, 69, 70, 71, 72, 73, 74, 74, 75,
-  76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91,
-  92, 93, 94, 95, 96, 97, 98, 99,100,101,102,104,105,106,107,108,
-  109,110,111,113,114,115,116,117,118,120,121,122,123,125,126,127
-};
-
-
-inline byte gamma(byte x) {
-    return bGammaCorrection ? pgm_read_byte(&gammaTable[x]) : (x & 0x7f);
-}
-
 // test builtin patterns
 
 // checkerboard
@@ -1399,9 +1472,9 @@ void CheckerBoard()
                 return;
             r = g = b = ((((y / size) % 2) ^ (x % 2)) & 1) ? 0 : 255;
             fixRGBwithGamma(&r, &g, &b);
-            strip.setPixelColor(y, r, g, b);
+            leds[y] = CRGB(r, g, b);
         }
-        strip.show();
+        FastLED.show();
         delay(frameHold);
     }
 }
@@ -1422,7 +1495,7 @@ void RandomBars()
         lcd.print(line);
         if (pass % 2) {
             // odd numbers, clear
-            strip.clear();
+            FastLED.clear();
         }
         else {
             // even numbers, show bar
@@ -1431,12 +1504,11 @@ void RandomBars()
             b = random(0, 255);
             fixRGBwithGamma(&r, &g, &b);
             // fill the strip color
-            strip.fill(strip.Color(r, g, b), 0, stripLength);
-            //for (int ix = 0; ix < stripLength; ++ix) {
-            //    strip.setPixelColor(ix, r, g, b);
-            //}
+            for (int ix = 0; ix < stripLength; ++ix) {
+                leds[ix] = CRGB(r, g, b);
+            }
         }
-        strip.show();
+        FastLED.show();
         delay(frameHold);
     }
 }
@@ -1460,8 +1532,11 @@ void RandomColors()
         b = random(0, 255);
         fixRGBwithGamma(&r, &g, &b);
         // fill the strip color
-        strip.fill(strip.Color(r, g, b), 0, stripLength);
-        strip.show();
+            // fill the strip color
+        for (int ix = 0; ix < stripLength; ++ix) {
+            leds[ix] = CRGB(r, g, b);
+        }
+        FastLED.show();
         delay(frameHold);
     }
 }
@@ -1505,15 +1580,15 @@ void RunningDot()
             sprintf(line, "%3d", ix);
             lcd.print(line);
             if (ix > 0) {
-                strip.setPixelColor(ix - 1, 0);
+                leds[ix - 1] = 0;
             }
-            strip.setPixelColor(ix, r, g, b);
-            strip.show();
+            leds[ix] = CRGB(r, g, b);
+            FastLED.show();
             delay(frameHold);
         }
         // remember the last one, turn it off
-        strip.setPixelColor(stripLength - 1, 0);
-        strip.show();
+        leds[stripLength - 1] = 0;
+        FastLED.show();
     }
 }
 
@@ -1557,20 +1632,20 @@ void RandomRunningDot()
             sprintf(line, "%3d", ix);
             lcd.print(line);
             if (ix > 0) {
-                strip.setPixelColor(ix - 1, 0);
+                leds[ix - 1] = CRGB(0, 0, 0);
             }
             int step = random(1, 10);
             if (step < 3) {
                 ix -= step;
             }
-            strip.setPixelColor(ix, r, g, b);
-            strip.show();
+            leds[ix] = CRGB(r, g, b);
+            FastLED.show();
             // randomize the hold time
             delay(random(0, frameHold * 2));
         }
         // remember the last one, turn it off
-        strip.setPixelColor(stripLength - 1, 0);
-        strip.show();
+        leds[stripLength - 1] = CRGB(0, 0, 0);
+        FastLED.show();
     }
 }
 
@@ -1608,17 +1683,17 @@ void OppositeRunningDots()
             if (CheckCancel())
                 return;
             if (ix > 0) {
-                strip.setPixelColor(ix - 1, 0);
-                strip.setPixelColor(stripLength - ix + 1, 0);
+                leds[ix - 1] = 0;
+                leds[stripLength - ix + 1] = 0;
             }
-            strip.setPixelColor(stripLength - ix, r, g, b);
-            strip.setPixelColor(ix, r, g, b);
-            strip.show();
+            leds[stripLength - ix] = CRGB(r, g, b);
+            leds[ix] = CRGB(r, g, b);
+            FastLED.show();
             delay(frameHold);
         }
         // remember the last one, turn it off
-        strip.setPixelColor(stripLength - 1, 0);
-        strip.show();
+        leds[stripLength - 1] = 0;
+        FastLED.show();
     }
 }
 
@@ -1626,18 +1701,21 @@ void OppositeRunningDots()
 #define BARBERCOUNT 40
 void BarberPole()
 {
-    uint32_t color, red, white, blue;
+CRGB:CRGB color, red, white, blue;
     byte r, g, b;
     r = 255, g = 0, b = 0;
     fixRGBwithGamma(&r, &g, &b);
-    red = strip.Color(r, g, b);
+    red = CRGB(r, g, b);
     r = 255, g = 255, b = 255;
     fixRGBwithGamma(&r, &g, &b);
-    white = strip.Color(r, g, b);
+    white = CRGB(r, g, b);
     r = 0, g = 0, b = 255;
     fixRGBwithGamma(&r, &g, &b);
-    blue = strip.Color(r, g, b);
-    for (int loop = 0; loop < 4 * BARBERCOUNT; ++loop) {
+    blue = CRGB(r, g, b);
+    //ShowProgressBar(0);
+    for (int loop = 0; loop < (4 * BARBERCOUNT); ++loop) {
+        //Serial.println("barber:" + String(loop));
+        //ShowProgressBar(loop * 100 / 4 * BARBERCOUNT);
         if (CheckCancel())
             return;
         for (int ledIx = 0; ledIx < stripLength; ++ledIx) {
@@ -1656,9 +1734,9 @@ void BarberPole()
                 color = blue;
                 break;
             }
-            strip.setPixelColor(ledIx, color);
+            leds[ledIx] = color;
         }
-        strip.show();
+        FastLED.show();
         delay(frameHold);
     }
 }
@@ -1672,31 +1750,29 @@ void CylonBounce(byte red, byte green, byte blue, int EyeSize, int SpeedDelay, i
     for (int i = 0; i < stripLength - EyeSize - 2; i++) {
         if (CheckCancel())
             return;
-        strip.clear();
-        strip.setPixelColor(i, red / 10, green / 10, blue / 10);
+        FastLED.clear();
+        leds[i] = CRGB(red / 10, green / 10, blue / 10);
         for (int j = 1; j <= EyeSize; j++) {
-            strip.setPixelColor(i + j, red, green, blue);
+            leds[i + j] = CRGB(red, green, blue);
         }
-        strip.setPixelColor(i + EyeSize + 1, red / 10, green / 10, blue / 10);
-        strip.show();
+        leds[i + EyeSize + 1] = CRGB(red / 10, green / 10, blue / 10);
+        FastLED.show();
         delay(SpeedDelay);
     }
-
     delay(ReturnDelay);
 
     for (int i = stripLength - EyeSize - 2; i > 0; i--) {
         if (CheckCancel())
             return;
-        strip.clear();
-        strip.setPixelColor(i, red / 10, green / 10, blue / 10);
+        FastLED.clear();
+        leds[i] = CRGB(red / 10, green / 10, blue / 10);
         for (int j = 1; j <= EyeSize; j++) {
-            strip.setPixelColor(i + j, red, green, blue);
+            leds[i + j] = CRGB(red, green, blue);
         }
-        strip.setPixelColor(i + EyeSize + 1, red / 10, green / 10, blue / 10);
-        strip.show();
+        leds[i + EyeSize + 1] = CRGB(red / 10, green / 10, blue / 10);
+        FastLED.show();
         delay(SpeedDelay);
     }
-
     delay(ReturnDelay);
 }
 
@@ -1705,17 +1781,17 @@ void TestTwinkle() {
 }
 
 void TwinkleRandom(int Count, int SpeedDelay, boolean OnlyOne) {
-    strip.clear();
-    byte brightness = (255 * nStripBrightness) / 100;
+    FastLED.clear();
+    byte brightness = map(nStripBrightness, 0, 100, 0, 255);
 
     for (int i = 0; i < Count; i++) {
         if (CheckCancel())
             return;
-        strip.setPixelColor(random(stripLength), random(0, brightness), random(0, brightness), random(0, brightness));
-        strip.show();
+        leds[random(stripLength)] = CRGB(random(0, brightness), random(0, brightness), random(0, brightness));
+        FastLED.show();
         delay(SpeedDelay);
         if (OnlyOne) {
-            strip.clear();
+            FastLED.clear();
         }
     }
 
@@ -1782,11 +1858,11 @@ void BouncingColoredBalls(byte colors[][3]) {
         for (int i = 0; i < BallCount; i++) {
             if (CheckCancel())
                 return;
-            strip.setPixelColor(Position[i], colors[i][0], colors[i][1], colors[i][2]);
+            leds[Position[i]] = CRGB(colors[i][0], colors[i][1], colors[i][2]);
         }
 
-        strip.show();
-        strip.clear();
+        FastLED.show();
+        FastLED.clear();
     }
 }
 
@@ -1796,7 +1872,7 @@ void TestMeteor() {
 }
 
 void meteorRain(byte red, byte green, byte blue, byte meteorSize, byte meteorTrailDecay, boolean meteorRandomDecay, int SpeedDelay) {
-    strip.clear();
+    FastLED.clear();
 
     for (int i = 0; i < stripLength + stripLength; i++) {
         if (CheckCancel())
@@ -1815,11 +1891,11 @@ void meteorRain(byte red, byte green, byte blue, byte meteorSize, byte meteorTra
             if (CheckCancel())
                 return;
             if ((i - j < stripLength) && (i - j >= 0)) {
-                strip.setPixelColor(i - j, red, green, blue);
+                leds[i - j] = CRGB(red, green, blue);
             }
         }
 
-        strip.show();
+        FastLED.show();
         delay(SpeedDelay);
     }
 }
