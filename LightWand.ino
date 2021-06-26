@@ -229,7 +229,20 @@ enum e_tests {
     mtMeteor,
     MAXTEST 
 };
+
 // test functions, in same order as enums above
+void RunningDot();
+void OppositeRunningDots();
+void RandomBars();
+void RandomColors();
+void CheckerBoard();
+void RandomRunningDot();
+void BarberPole();
+void TestCylon();
+void TestTwinkle();
+void TestBouncingBalls();
+void TestMeteor();
+ 
 void (*testFunctions[MAXTEST])() = {
     RunningDot,
     OppositeRunningDots,
