@@ -39,7 +39,8 @@
 #include <LiquidCrystal.h>               // Library for the LCD Display
 #include <SPI.h>                         // Library for the SPI Interface
 #include <avr/eeprom.h>
-#include <timer.h>
+//#include <timer.h> // this is from https://github.com/contrem/arduino-timer, note that the author has renamed the file
+#include <arduino-timer.h> // the new name for <timer.h> when using the latest library
 #include "LightWand.h"
 
 // Gramma Correction (Defalt Gamma = 2.8)
